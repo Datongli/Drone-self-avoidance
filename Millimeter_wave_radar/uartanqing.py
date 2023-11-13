@@ -1,5 +1,6 @@
 """
 这个文件是丁建新师兄发来的，处理毫米波雷达信息的文件，现在先试图看懂
+可以尝试更改一下
 """
 
 import serial
@@ -12,6 +13,7 @@ import time
 import struct
 import math
 import serial
+import json
 
 def ByteToHex( bins ):
     return ''.join( [ "%02X" % x for x in bins ] ).strip()
