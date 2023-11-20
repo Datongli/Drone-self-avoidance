@@ -4,6 +4,7 @@
 """
 
 import serial  # 导入串口通信模块
+import serial.tools.list_ports
 import tkinter  # 导入图形用户界面模块
 import os  # 导入操作系统相关的模块
 import tkinter.messagebox  # 导入用于弹出消息框的模块
@@ -25,20 +26,30 @@ def ByteToHex(bins):
 
 if __name__ == "__main__":
 
+    # 检查是否有可用的串口设备
+    ports_list = list(serial.tools.list_ports.comports())
+    if len(ports_list) <= 0:
+        print("无串口设备。")
+    else:
+        print("可用的串口设备如下：")
+        for comport in ports_list:
+            print(list(comport)[0], list(comport)[1])
+
     # 打开串口通信，波特率为115200
     ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
     # 检查串口是否打开
     a = ser.isOpen()
-    # print(a)
+    print(a)
     # ser.write("hello".encode())
     # path = tkinter.filedialog.askopenfilename()
     # print(path)
     # 文件路径（暂时指定为'test.txt'，可以根据实际情况修改）
+    # 根据现有知识，这里应该是配置雷达的文件
     path = r'D:\学习\研究生\安擎\毫米波雷达文件\test.txt'
     f = open(path, 'r', encoding='UTF-8')  # 以只读方式打开文件
     i = 1
     while i < 45:
-        # 循环44次
+        # 循环44次，将配置的文件通过串口发出，发送给板卡
         txt = f.readline()  # 逐行读取文件内容
         print(txt)
         time.sleep(0.2)
@@ -79,53 +90,54 @@ if __name__ == "__main__":
         e = array[96:100]  # 截取列表的一部分
 
         # int(ff, 16) #16进制转换为10进制
-        range1_list = []
-        azimuth_list = []
-        elevation_list = []
-        doppler_list = []
+        range1_list = []  # range1：范围
+        azimuth_list = []  # azimuth：方位角
+        elevation_list = []  # elevation：高度（可能是海拔）
+        doppler_list = []  # doppler：多普勒
         # 如果temp的前16个字符等于"0201040306050807"
         if temp[0:16] == "0201040306050807":
             # 计算数据长度
-            length = (int(array[112], 16) * 16+int(array[113], 16) +
-                      int(array[114],16) * 16 ** 3 + int(array[115], 16) * 16 ** 2)
+            # int(array[112], 16)意思是，将array[166]以十六进制理解，然后以十进制整数展示
+            length = (int(array[112], 16) * 16 + int(array[113], 16) +
+                      int(array[114], 16) * 16 ** 3 + int(array[115], 16) * 16 ** 2)
             # 计算长度1
             length1 = int(array[114] + array[115] + array[112] + array[113], 16)
 
             # 如果temp的第104到108个字符等于“0600”
             if temp[104:108] == "0600":
-                numpoint = (length1-16)/32  # 计算点的数量
+                numpoint = (length1 - 16) / 32  # 计算点的数量
                 numpoint = 1  # 设置点的数量为1
                 i = 1
                 while i <= numpoint:
                     index = 32 * (i - 1) + 120
-                    # 获取range1的值
-                    range1 = (array[index + 6] + array[index + 7] + array[index + 4] + array[index+5]
+                    # 获取range1的值 range：范围
+                    range1 = (array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5]
                               + array[index + 2] + array[index + 3] + array[index] + array[index + 1])
                     # 将range1的十六进制字符串转换为浮点数
                     range1_f = struct.unpack('!f', bytes.fromhex(range1))[0]
                     range1_list.append(range1_f)  # 将range1的值添加到range1_list列表中
-                    index = index+8
-                    # 获取azimuth的值
-                    azimuth=array[index+6]+array[index+7]+array[index+4]+array[index+5]+array[index+2]+array[index+3]+array[index]+array[index+1]
+                    index += 8
+                    # 获取azimuth的值 azimuth：方位角
+                    azimuth = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[index + 2] + array[index + 3] + array[index] + array[index + 1]
                     # 将azimuth的十六进制字符串转换为浮点数
                     azimuth_f = struct.unpack('!f', bytes.fromhex(azimuth))[0]
                     # print(azimuth_f)
                     azimuth_list.append(azimuth_f)
                     index += 8
-                    # 获取elevation的值
+                    # 获取elevation的值 elecation:海拔高度
                     elevation = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[index + 2] + array[index + 3] + array[index] + array[index + 1]
                     # 将elevation的十六进制字符串转换为浮点数
                     elevation_f = struct.unpack('!f', bytes.fromhex(elevation))[0]
                     # print(elevation_f)
                     elevation_list.append(elevation_f)
                     index += 8
-                    # 获取doppler的值
+                    # 获取doppler的值  doppler：多普勒
                     doppler = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[index + 2] + array[index + 3] + array[index] + array[index + 1]
                     # 将doppler的十六进制字符串转换为浮点数
                     doppler_f = struct.unpack('!f', bytes.fromhex(doppler))[0]
                     # print(doppler_f)
                     doppler_list.append(doppler_f)
-                    i=i+1
+                    i = i + 1
                 x = range1_f * math.sin(azimuth_f)  # 计算x坐标
                 y = range1_f * math.cos(azimuth_f)  # 计算y坐标
                 z = range1_f * math.sin(elevation_f)  # 计算z坐标
