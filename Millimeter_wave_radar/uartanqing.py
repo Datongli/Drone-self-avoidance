@@ -5,6 +5,7 @@
 
 import serial  # 导入串口通信模块
 import serial.tools.list_ports
+import numpy as np
 import tkinter  # 导入图形用户界面模块
 import os  # 导入操作系统相关的模块
 import tkinter.messagebox  # 导入用于弹出消息框的模块
@@ -36,7 +37,7 @@ if __name__ == "__main__":
             print(list(comport)[0], list(comport)[1])
 
     # 打开串口通信，波特率为115200
-    ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+    ser = serial.Serial('COM6', 115200, timeout=1)
     # 检查串口是否打开
     a = ser.isOpen()
     print(a)
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     ser.close()  # 关闭串口
     # 打开另一个串口
     # 指定串口设备路径、波特率、超时时间和字节间超时时间
-    ser1 = serial.Serial('/dev/ttyACM1', 921600, timeout=0.002, inter_byte_timeout=0.0001)
+    ser1 = serial.Serial('COM5', 921600, timeout=0.002, inter_byte_timeout=0.0001)
     ser1.stopbits = 1  # 停止位数量为1，每个字节后有一个停止位
     ser1.bytesize = 8  # 每个字节大小设置为8位
     # c=ser1.isOpen()
@@ -84,36 +85,45 @@ if __name__ == "__main__":
         # time.sleep(2)
         # print(temp[0])
         temp = ByteToHex(temp)  # 将字节数据转换为十六进制字符串
-        # index=str.find("0201040306050807")
-        # print(temp)
-        array = list(temp)  # 接收数据存成list，将字符串转换为字符列表
-        e = array[96:100]  # 截取列表的一部分
+        array = list(temp)  # 接收数据存成list，将字符串转换为字符列表。没有检测到内容就是空的，检测到内容为非空
+        # print("array:{}".format(array))
+        # e = array[96:100]  # 截取列表的一部分
 
         # int(ff, 16) #16进制转换为10进制
         range1_list = []  # range1：范围
         azimuth_list = []  # azimuth：方位角
         elevation_list = []  # elevation：高度（可能是海拔）
         doppler_list = []  # doppler：多普勒
-        # 如果temp的前16个字符等于"0201040306050807"
+        # 如果temp的前16个字符等于"0201040306050807"帧报头的魔法词
         if temp[0:16] == "0201040306050807":
+            print("=" * 500)
             # 计算数据长度
-            # int(array[112], 16)意思是，将array[166]以十六进制理解，然后以十进制整数展示
+            # 如果没有采集到目标，那么array的长度就是128
+            print("array-shape:{}".format(np.shape(array)))
+            # int(array[112], 16)意思是，将array[112]以十六进制理解，然后以十进制整数展示
+            # 下面这段的意思就是将一段十六进制的数，转换为10进制的
             length = (int(array[112], 16) * 16 + int(array[113], 16) +
                       int(array[114], 16) * 16 ** 3 + int(array[115], 16) * 16 ** 2)
-            # 计算长度1
+            # 计算length1，length和length1的结果是一样的，完全可以直接替换
             length1 = int(array[114] + array[115] + array[112] + array[113], 16)
+            print("tvl_normal:{}".format(array[112:116]))
+            print("length:{}, length1:{}".format(length, length1))
 
             # 如果temp的第104到108个字符等于“0600”
             if temp[104:108] == "0600":
-                numpoint = (length1 - 16) / 32  # 计算点的数量
-                numpoint = 1  # 设置点的数量为1
+                # numpoint = (length1 - 16) / 32  # 计算点的数量
+                numpoint = (length1 - 8) / 16  # 计算点的数量
+                print("point_num:{}".format(numpoint))
+                # numpoint = 1  # 设置点的数量为1
                 i = 1
                 while i <= numpoint:
+                    # 现在的index都是120
                     index = 32 * (i - 1) + 120
+                    print("点云{}：{}".format(i, array[120 + 32 * (i - 1): 120 + 32 * i]))
                     # 获取range1的值 range：范围
                     range1 = (array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5]
                               + array[index + 2] + array[index + 3] + array[index] + array[index + 1])
-                    # 将range1的十六进制字符串转换为浮点数
+                    # 将range1的十六进制字符串转换为浮点数，涉及到相应的结束标准
                     range1_f = struct.unpack('!f', bytes.fromhex(range1))[0]
                     range1_list.append(range1_f)  # 将range1的值添加到range1_list列表中
                     index += 8
@@ -124,7 +134,7 @@ if __name__ == "__main__":
                     # print(azimuth_f)
                     azimuth_list.append(azimuth_f)
                     index += 8
-                    # 获取elevation的值 elecation:海拔高度
+                    # 获取elevation的值 elevation:高度仰角
                     elevation = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[index + 2] + array[index + 3] + array[index] + array[index + 1]
                     # 将elevation的十六进制字符串转换为浮点数
                     elevation_f = struct.unpack('!f', bytes.fromhex(elevation))[0]
@@ -136,25 +146,19 @@ if __name__ == "__main__":
                     # 将doppler的十六进制字符串转换为浮点数
                     doppler_f = struct.unpack('!f', bytes.fromhex(doppler))[0]
                     # print(doppler_f)
+                    print("doppler_f:{}".format(doppler_f))
                     doppler_list.append(doppler_f)
+
+                    # 计算目标的各个参数
+                    x = range1_f * math.cos(elevation_f) * math.sin(azimuth_f)  # 计算x坐标
+                    y = range1_f * math.cos(elevation_f) * math.cos(azimuth_f)  # 计算y坐标
+                    z = range1_f * math.sin(elevation_f)  # 计算z坐标
+                    # 格式化输出x,y,z坐标
+                    efflist = "%f %f %f" % (x, y, z)
+                    print(efflist)
+
                     i = i + 1
-                x = range1_f * math.sin(azimuth_f)  # 计算x坐标
-                y = range1_f * math.cos(azimuth_f)  # 计算y坐标
-                z = range1_f * math.sin(elevation_f)  # 计算z坐标
-                # 格式化输出x,y,z坐标
-                efflist="%f %f %f" %(x,y,z)
-                print(efflist)
-                # 构造post_data字典
-                post_data = {"Obstacle":
-                    {
-                    "Obstacle_X": float(x),
-                    "Obstacle_Y": float(y),
-                    "Obstacle_Z": float(z),
-                 }
-                }
-                print(json.dumps(post_data))
-                #os.system(
-                # f"python3 drone_sdk.py -f linkkit_thing_post_property -j '{json.dumps(post_data)}' -s 0")
+
                 time.sleep(0.5)
 
   
