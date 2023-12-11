@@ -50,8 +50,7 @@ def HexToFloat(array):
     :return: 转换完成的float类型数据
     """
     # 将十六进制字符列表连接成一个字符串
-    hex_str = (array[6] + array[7] + array[4] + array[5]
-                              + array[2] + array[3] + array[0] + array[1])
+    hex_str = (array[6] + array[7] + array[4] + array[5] + array[2] + array[3] + array[0] + array[1])
     # 使用struct解析为浮点数，小端字节序
     # float_value = struct.unpack('f', struct.pack('I', decimal_value))[0]
     float_value = struct.unpack('!f', bytes.fromhex(hex_str))[0]
@@ -109,11 +108,11 @@ if __name__ == "__main__":
     # print(path)
     # 文件路径（暂时指定为'test.txt'，可以根据实际情况修改）
     # 根据现有知识，这里应该是配置雷达的文件
-    path = r'D:\学习\研究生\安擎\毫米波雷达文件\demo.txt'
+    path = r'D:\学习\研究生\安擎\毫米波雷达文件\demo_velocity.txt'
     f = open(path, 'r', encoding='UTF-8')  # 以只读方式打开文件
     i = 1
     while i < 35:
-        # 循环44次，将配置的文件通过串口发出，发送给板卡
+        # 循环34次，将配置的文件通过串口发出，发送给板卡
         txt = f.readline()  # 逐行读取文件内容
         print(txt)
         time.sleep(0.2)
@@ -144,7 +143,7 @@ if __name__ == "__main__":
         temp = ser1.read_all()  # 读取所有可用的数据
 
         # flush()
-        # print(temp)
+        # print(temp, len(temp))
         # time.sleep(2)
         # print(temp[0])
         temp = ByteToHex(temp)  # 将字节数据转换为十六进制字符串
@@ -157,23 +156,24 @@ if __name__ == "__main__":
         azimuth_list = []  # azimuth：方位角
         elevation_list = []  # elevation：高度（可能是海拔）
         doppler_list = []  # doppler：多普勒
+        # print(temp, len(temp))
         # 如果temp的前16个字符等于"0201040306050807"帧报头的魔法词
         if temp[0:16] == "0201040306050807":
             print("=" * 500)
             # 计算数据长度
-            # 如果没有采集到目标，那么array的长度就是128
+            # 现在是不论怎样，都直接是912长度，456字节，
+            # 有的时候甚至没有将检测到的目标找全，到456字节就截断了
             print("array-shape:{}".format(np.shape(array)))
             # 检测到对象的数量，和后面的length是对应的，length是以字节计数的，每个对象16个字节
-            print("检测到对象数量：{}".format(array[56: 64]))
+            print("检测到对象数量：{},{}".format(array[56: 64], HexToDecimal(array[56: 64])))
             # 提取出检测到的对象的数量
             object_num = HexToDecimal(array[56: 64])
-            # x_list = []
-            # y_list = []
-            # z_list = []
             # 用于存储坐标数据的队列
             coordinate_queue = Queue()
             # 提取出每一个对象的x,y,z坐标
             for i in range(object_num):
+                if i > 24:
+                    continue
                 x_hex = array[96 + i * 32: 104 + i * 32]
                 y_hex = array[104 + i * 32: 112 + i * 32]
                 z_hex = array[112 + i * 32: 120 + i * 32]
@@ -182,10 +182,7 @@ if __name__ == "__main__":
                 y_float = HexToFloat(y_hex)
                 z_float = HexToFloat(z_hex)
                 v_float = HexToFloat(v_hex)
-                print("x:{};y:{};z:{};v:{}".format(x_float, y_float, z_float, v_float))
-                # x_list.append(x_float)
-                # y_list.append(y_float)
-                # z_list.append(z_float)
+                print("第{}个;x:{};y:{};z:{};v:{}".format(i +1, x_float, y_float, z_float, v_float))
             # # 将坐标数据放入队列
             # coordinate_queue.put({'x': x_list, 'y': y_list, 'z': z_list})
             # # 启动绘制线程
@@ -193,90 +190,4 @@ if __name__ == "__main__":
             # plot_thread.start()
             # plt.show()
             # # 模拟实时获取坐标数据的时间间隔
-            # time.sleep(2)
-
-            continue
-
-
-
-
-
-
-
-
-
-
-
-
-            # int(array[112], 16)意思是，将array[112]以十六进制理解，然后以十进制整数展示
-            # 下面这段的意思就是将一段十六进制的数，转换为10进制的
-            length = (int(array[112], 16) * 16 + int(array[113], 16) +
-                      int(array[114], 16) * 16 ** 3 + int(array[115], 16) * 16 ** 2)
-            # 计算length1，length和length1的结果是一样的，完全可以直接替换
-            length1 = int(array[114] + array[115] + array[112] + array[113], 16)
-            print("tvl_normal:{}".format(array[112:116]))
-            print("length:{}, length1:{}".format(length, length1))
-
-            # 如果temp的第104到108个字符等于“0600”
-            if temp[104:108] == "0600":
-                # numpoint = (length1 - 16) / 32  # 计算点的数量
-                numpoint = (length1 - 8) / 16  # 计算点的数量
-                print("point_num:{}".format(numpoint))
-                # numpoint = 1  # 设置点的数量为1
-                i = 1
-                while i <= numpoint:
-                    # 现在的index都是120
-                    index = 32 * (i - 1) + 120
-                    print("点云{}：{}".format(i, array[120 + 32 * (i - 1): 120 + 32 * i]))
-                    # 获取range1的值 range：范围
-                    range1 = (array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5]
-                              + array[index + 2] + array[index + 3] + array[index] + array[index + 1])
-                    # 将range1的十六进制字符串转换为浮点数，涉及到相应的结束标准
-                    range1_f = struct.unpack('!f', bytes.fromhex(range1))[0]
-                    range1_list.append(range1_f)  # 将range1的值添加到range1_list列表中
-                    index += 8
-                    # 获取azimuth的值 azimuth：方位角
-                    azimuth = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[
-                        index + 2] + array[index + 3] + array[index] + array[index + 1]
-                    # 将azimuth的十六进制字符串转换为浮点数
-                    azimuth_f = struct.unpack('!f', bytes.fromhex(azimuth))[0]
-                    # print(azimuth_f)
-                    azimuth_list.append(azimuth_f)
-                    index += 8
-                    # 获取elevation的值 elevation:高度仰角
-                    elevation = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[
-                        index + 2] + array[index + 3] + array[index] + array[index + 1]
-                    # 将elevation的十六进制字符串转换为浮点数
-                    elevation_f = struct.unpack('!f', bytes.fromhex(elevation))[0]
-                    # print(elevation_f)
-                    elevation_list.append(elevation_f)
-                    index += 8
-                    # 获取doppler的值  doppler：多普勒
-                    doppler = array[index + 6] + array[index + 7] + array[index + 4] + array[index + 5] + array[
-                        index + 2] + array[index + 3] + array[index] + array[index + 1]
-                    # 将doppler的十六进制字符串转换为浮点数
-                    doppler_f = struct.unpack('!f', bytes.fromhex(doppler))[0]
-                    # print(doppler_f)
-                    print("doppler_f:{}".format(doppler_f))
-                    doppler_list.append(doppler_f)
-
-                    # 计算目标的各个参数
-                    x = range1_f * math.cos(elevation_f) * math.sin(azimuth_f)  # 计算x坐标
-                    y = range1_f * math.cos(elevation_f) * math.cos(azimuth_f)  # 计算y坐标
-                    z = range1_f * math.sin(elevation_f)  # 计算z坐标
-                    # 格式化输出x,y,z坐标
-                    efflist = "%f %f %f" % (x, y, z)
-                    print(efflist)
-
-                    i = i + 1
-
-                time.sleep(0.5)
-
-
-
-
-
-
-
-
-
+            # time.sleep(0.5)
