@@ -56,11 +56,11 @@ class QValueNet(torch.nn.Module):
         return self.fc2(x)
 
 
-class TwoLayerFC(torch.nn.Module):
+class LayerFC(torch.nn.Module):
     """
     这是一个简单的两层神经网络
     """
-    def __init__(self, num_in, num_out, hidden_dim, activation=F.relu, out_fn=lambda x:x):
+    def __init__(self, num_in, num_out, hidden_dim, activation=F.relu, out_fn=lambda x: x):
         """
         初始化这个两层神经网络
         :param num_in: 输入的节点数量
@@ -68,21 +68,25 @@ class TwoLayerFC(torch.nn.Module):
         :param hidden_dim: 隐藏层节点数量
         :param activation: 激活函数
         :param out_fn: 输出的函数。这里使用了一个匿名函数 (lambda 函数)，该函数接受一个参数 x，并直接返回 x。
-        例如，如果你创建了一个 TwoLayerFC 类的实例时提供了一个不同的输出函数，比如 out_fn=lambda x: torch.sigmoid(x)，
-        那么在前向传播过程中就会应用该函数来处理神经网络的输出。这使得 TwoLayerFC 类更加灵活，能够适应不同的需求。
+        例如，如果你创建了一个 LayerFC 类的实例时提供了一个不同的输出函数，比如 out_fn=lambda x: torch.sigmoid(x)，
+        那么在前向传播过程中就会应用该函数来处理神经网络的输出。这使得 LayerFC 类更加灵活，能够适应不同的需求。
         """
-        super(TwoLayerFC, self).__init__()
+        super(LayerFC, self).__init__()
         self.fc1 = torch.nn.Linear(num_in, hidden_dim)
         self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = torch.nn.Linear(hidden_dim, num_out)
+        self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.fc5 = torch.nn.Linear(hidden_dim, num_out)
         self.activation = activation
         self.out_fn = out_fn
 
     def forward(self, x):
         x = self.activation(self.fc1(x))
         x = self.activation(self.fc2(x))
+        x = self.activation(self.fc3(x))
+        x = self.activation(self.fc4(x))
         # 通过最后一层的处理，可以自定义输出
-        x = self.out_fn(self.fc3(x))
+        x = self.out_fn(self.fc5(x))
         return x
 
 
@@ -108,10 +112,10 @@ class DDPG:
         :param device:设备
         """
         out_fn = (lambda x: x) if discrete else (lambda x: torch.tanh(x) * action_bound)
-        self.actor = TwoLayerFC(num_in_actor, num_out_actor, hidden_dim, activation=F.relu, out_fn=out_fn).to(device)
-        self.target_actor = TwoLayerFC(num_in_actor, num_out_actor, hidden_dim, activation=F.relu, out_fn=out_fn).to(device)
-        self.critic = TwoLayerFC(num_in_critic, 3, hidden_dim).to(device)
-        self.target_critic = TwoLayerFC(num_in_critic, 3, hidden_dim).to(device)
+        self.actor = LayerFC(num_in_actor, num_out_actor, hidden_dim, activation=F.relu, out_fn=out_fn).to(device)
+        self.target_actor = LayerFC(num_in_actor, num_out_actor, hidden_dim, activation=F.relu, out_fn=out_fn).to(device)
+        self.critic = LayerFC(num_in_critic, 3, hidden_dim).to(device)
+        self.target_critic = LayerFC(num_in_critic, 3, hidden_dim).to(device)
         # 初始化目标价值网络并设置和价值网络相同的参数
         self.target_critic.load_state_dict(self.critic.state_dict())
         # 初始化目标策略网络并设置和策略相同的参数
@@ -125,6 +129,14 @@ class DDPG:
         self.tau = tau
         self.action_dim = num_out_actor
         self.device = device
+        # 可以被初始化的网络的字典，用于承接预训练的模型参数
+        self.net_dict = {'actor': self.actor,
+                         'target_actor': self.target_actor,
+                         'critic': self.critic,
+                         'target_critic': self.target_critic}
+        # 可以被初始化的优化器的字典，用于承接优化器
+        self.net_optim = {'actor': self.actor_optimizer,
+                          'critic': self.critic_optimizer}
 
     def take_action(self, state):
         """
