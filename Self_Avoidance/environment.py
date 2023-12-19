@@ -3,6 +3,9 @@
 """
 import torch
 import numpy as np
+import math
+import random
+import UAV
 
 
 def calculate_distance(point1, point2):
@@ -12,171 +15,176 @@ def calculate_distance(point1, point2):
     :param point2: 第二个点的坐标 (x2, y2, z2)
     :return: 两点之间的距离
     """
-    distance = np.sqrt(np.sum((np.array(point2) - np.array(point1))**2))
+    distance = np.sqrt(np.sum((np.array(point2) - np.array(point1)) ** 2))
     return distance
 
 
-def check_collision(sphere_center, sphere_radius, min_bound, max_bound):
+class Building:
     """
-    判断球体和立方体是否相撞
-    :param sphere_center:球体球心
-    :param sphere_radius: 球体半径
-    :param min_bound:立方体最左下角的点
-    :param max_bound:立方体最右上角的点
-    :return:是否相撞，距离
+    建筑物的类
     """
-    min_bound = np.array(min_bound)
-    max_bound = np.array(max_bound)
-    # 将球心坐标限制在立方体边界内
-    closest_point = np.clip(sphere_center, min_bound, max_bound)
-    # 计算球心到最近点的距离
-    distance = np.linalg.norm(sphere_center - closest_point)
-    # 判断球体是否在立方体内或相交
-    return distance <= sphere_radius, distance
+
+    def __init__(self, x, y, length, width, height, left_down, right_up):
+        self.x = x  # 建筑物中心的x坐标
+        self.y = y  # 建筑物中心的y坐标
+        self.length = length  # 建筑物x方向长度一半
+        self.width = width  # 建筑物y方向宽度一半
+        self.height = height  # 建筑物高度
+        self.left_down = left_down  # 建筑物左下角点的坐标
+        self.right_up = right_up  # 建筑物右上角点的坐标
+
+
+class Target:
+    """
+    目标点的类别
+    """
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
 
 
 class Environment:
     """
     用于和智能体交互的环境实例
     """
-    def __init__(self, obstacle, agent_state, agent_r, target_area, action_area):
-        # 障碍物字典
-        self.obstacle = obstacle
-        # 智能体的初始化位置(不变)
-        self.state_initial = agent_state
-        # 智能体的位置(可改变)
-        self.state = self.state_initial
-        # 智能体的半径
+
+    def __init__(self, agent_r, action_area, num_nuvs, v0):
+        # 无人机的状态
+        self.state = []
+        # 无人机的半径
         self.agent_r = agent_r
-        # 动作的步数
-        self.steps = 0
-        # 得到目标区域（对角线形式）
-        self.target_area = target_area
+        # 目标点位
+        self.target = [0, 0, 0]
         # 环境给的奖励值
         self.reward = 0
         # 可以运动的空间(对角线形式)
         self.action_area = action_area
+        # 课程学习的水平(训练难度等级)
+        self.level = 1
+        # 无人机对象的集合，为了提升效率，每次不单单使用一个无人机进行搜索，可以是多个
+        self.uavs = []
+        # 风场(风速,风向角)先默认为水平风
+        self.WindField = [30.0, 0.0]
+        # 建筑集合
+        self.bds = []
+        # 训练环境中的无人机个数
+        self.num_uavs = num_nuvs
+        # 无人机可控风速
+        self.v0 = v0
 
     def reset(self):
         """
-        重置智能体
-        :return: 智能体的初始位置
+        重置环境
+        将重新按照课程学习的水平，生成建筑物
+        重新给无人机分配起始点，建立新的目标区域等等
+        :return:重置后的状态
         """
-        # 步数清零
-        self.steps = 0
-        # 智能体位置归位
-        self.state = self.state_initial
+        """清空无人机对象和建筑物对象"""
+        # 清空无人机对象集合
+        self.uavs = []
+        # 清空建筑对象集合
+        self.bds = []
         # 奖励值清零
         self.reward = 0
+        """生成风场"""
+        # 风场（风速，风向角）
+        self.WindField = []
+        # 生成随机风力和风向
+        self.WindField.append(np.random.normal(40, 5))  # 生成服从正态分布的对象，均值为40，方差为5
+        self.WindField.append(2 * math.pi * random.random())  # 生成风向，角度制
+        """构建建筑物"""
+        # 随机生成建筑物，根据难度等级随机循环，同时判断是否有重叠
+        while True:
+            # 要生成建筑物的数量，依据课程学习的难度进行
+            building_num = random.randint(self.level, self.level * 2)
+            # 建筑物中心的x坐标
+            x = random.uniform(10, self.action_area[1][0] - 10)
+            # 建筑物中心的y坐标
+            y = random.uniform(10, self.action_area[1][1] - 10)
+            # 建筑物x方向长度的一半
+            length = random.uniform(1, 5)
+            # 建筑物y方向宽度的一半
+            width = random.uniform(1, 5)
+            # 建筑物高度
+            height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 8)
+            # 建筑物左下角的点
+            left_down = [x - length, y - width, 0]
+            # 建筑物右上角的点
+            right_up = [x + length, y + width, height]
+            """判断生成的建筑物是否有重叠现象"""
+            if len(self.bds) == 0:
+                # 如果是第一次生成，直接跳过判断，增加列表中元素
+                self.bds.append(Building(x, y, length, width, height, left_down, right_up))
+            else:
+                # 是否重叠的标志位
+                overlop_num = 0
+                for building in self.bds:
+                    # 如果没有重叠现象
+                    if abs(x - building.x) >= length + building.length or abs(y - building.y) >= width + building.width:
+                        continue
+                    else:
+                        overlop_num = 1
+                        # 只要判断到有重叠，就不需要判断再判断了
+                        break
+                # 如果没有重叠
+                if overlop_num == 0:
+                    self.bds.append(Building(x, y, length, width, height, left_down, right_up))
+            # 判断是否达到要生成的数量
+            if len(self.bds) >= building_num:
+                break
+        """随机生成目标点的位置"""
+        while True:
+            # 生成目标点位
+            x = random.randint(60, 90)
+            y = random.randint(10, 90)
+            z = random.randint(5, self.action_area[1][2] - 3)
+            # 判断目标是否在障碍物中
+            in_build = 0  # 标志位
+            for building in self.bds:
+                if (building.left_down[0] - 1 <= x <= building.right_up[0] + 1
+                        and building.left_down[1] - 1 <= y <= building.right_up[1] + 1
+                        and building.left_down[2] <= z <= building.right_up[2] + 1):
+                    # 目标在障碍物中
+                    in_build = 1
+                    break
+            if in_build == 0:
+                self.target = Target(x, y, z)
+                break
+        """随机生成无人机的初始位置"""
+        for _ in range(self.num_uavs):
+            while True:
+                # 生成初始坐标
+                x = random.randint(15, 30)
+                y = random.randint(10, 90)
+                z = random.randint(3, 7)
+                in_build = 0
+                # 确保没有生成在障碍物的区域
+                for building in self.bds:
+                    if (building.left_down[0] - 2 <= x <= building.right_up[0] + 2
+                            and building.left_down[1] - 2 <= y <= building.right_up[1] + 2
+                            and building.left_down[2] <= z <= building.right_up[2] + 2):
+                        in_build = 1
+                        break
+                if in_build == 0:
+                    self.uavs.append(UAV.UAV(x, y, z, self.agent_r, self))
+                    break
+        # 更新无人机状态 np.vstack: 按照行方向堆叠数组  uav.state()是长度为140的列表，代表了各种状态
+        self.state = np.vstack([uav.state() for (_, uav) in enumerate(self.uavs)])
         return self.state
 
-    def collision(self, state):
-        """
-        判断智能体是否与障碍物相撞或者边界相撞的函数
-        :param state: 智能体当前的状态
-        :return: 相撞与否的状态
-        """
-        # 初始化“距离”字典
-        distance_dist = {"sphere": [],  # 球体
-                         "cube": [],  # 立方体
-                        "boundary": []  # 边界
-                         }
-        # 初始化“是否相撞”的指标
-        collision_or_not = []
-        # 得到球体（半球）障碍的个数
-        sphere_num = len(self.obstacle['sphere'])
-        for i in range(sphere_num):
-            # 可能需要先将state转化为列表类型的数据
-            # 得到球心的坐标
-            spherical_center = self.obstacle['sphere'][i][0]
-            # 得到半径
-            spherical_r = self.obstacle['sphere'][i][1]
-            # 计算智能体和球形目标之间的距离
-            distance = calculate_distance(spherical_center, state)
-            distance_dist['sphere'].append(distance)
-            # 如果小于两个球体的半径和，判断为相撞
-            if distance <= self.agent_r + spherical_r:
-                collision_or_not.append(True)
-            else:
-                collision_or_not.append(False)
-        # 得到立方体障碍
-        cub = self.obstacle['cube']
-        # 得到立方体障碍的个数
-        cube_num = len(cub)
-        for i in range(cube_num):
-            # 判断智能体是否与立方体障碍相撞，并得到距离
-            pd, distance = check_collision(state, self.agent_r, cub[i][0], cub[i][1])
-            distance_dist['cube'].append(distance)
-            if pd:
-                collision_or_not.append(True)
-            else:
-                collision_or_not.append(False)
-        # 判断是否与边界发生碰撞
-        for i in range(len(state)):
-            if self.agent_r <= state[i] <= (100 - self.agent_r):
-                collision_or_not.append(False)
-            else:
-                collision_or_not.append(True)
-        # 计算与边界的距离
-        for i in range(len(self.action_area)):
-            for j in range(len(self.action_area[i])):
-                distance_dist['boundary'].append(self.state[j] - self.action_area[i][j])
-        # 返回是否碰撞和距离字典
-        if True in collision_or_not:
-            return True, distance_dist
-        else:
-            return False, distance_dist
-
-    def step(self, action):
+    def step(self, action, i):
         """
         环境更新函数
-        :param action: 动作量，尽量用np.array
-        :return: 下一个状态，奖励，是否结束
+        :param action: 无人机提供的动作array类型的数据
+        :param i:第i个无人机
+        :return: 下一个状态，奖励，是否结束，用于调试的额外信息等
         """
-        # 步数更新
-        self.steps += 1
-        # 奖励值更新
-        self.reward += -1 * 1
-        # 结束与否
-        done = False
-        # 判断是否有碰撞发生，同时计算障碍物和智能体之间的距离
-        col_or_not, obstacle_distance_dist = self.collision(self.state)
-        if col_or_not:
-            # 如果相撞，奖励-100，结束
-            self.reward += -100
-            done = True
-        else:
-            # 如果没有相撞
-            for i in range(len(obstacle_distance_dist['sphere'])):
-                self.reward += -10 * (1 / obstacle_distance_dist['sphere'][i])
-            for i in range(len(obstacle_distance_dist['cube'])):
-                self.reward += -10 * (1 / obstacle_distance_dist['cube'][i])
-            for i in range(len(obstacle_distance_dist['boundary'])):
-                self.reward += -10 * (1 / abs(obstacle_distance_dist['boundary'][i]))
-        # 判断是否到达目标区域
-        arrive_or_not, distance = check_collision(self.state, self.agent_r, self.target_area[0], self.target_area[1])
-        if arrive_or_not:
-            # 如果到达，奖励200，结束
-            self.reward += 200
-            done = True
-        else:
-            # 如果没有相撞
-            self.reward += -10 * distance
-        # 得到下一个状态量（这一版是直接在xyz坐标上加减）
-        next_state = self.state + action
-        # 更新状态
-        self.state = next_state
-        return next_state, self.reward, done
-
-
-
-
-
-
-
+        # 无人机执行行为,info为是否到达目标点
+        reward, done, info = self.uavs[i].update(action)
+        next_state = self.uavs[i].state()
+        return next_state, reward, done, info
 
 
 if __name__ == "__main__":
     pass
-
-
