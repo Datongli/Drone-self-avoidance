@@ -7,30 +7,39 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import tools
 from DDPG import DDPG
 import environment
-import random
+
+import matplotlib
+matplotlib.use('TkAgg')  # 或者其他后端
 
 
 if __name__ == '__main__':
+    # 是否不加载权重，重新开始训练
+    retrain = True
+    print("hello")
     # pth文件保存的位置
-    pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
-                'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
-                'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
-                'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
+    pth_load = {'actor': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\actor.pth',
+                'critic': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\critic.pth',
+                'target_actor': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
+                'target_critic': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
+    # pth_load = {'actor': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\actor.pth',
+    #             "critic_1": r'D:\ldt\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
+    #             "critic_2": r'D:\ldt\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
+    #             'target_critic_1': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\target_critic_1.pth',
+    #             'target_critic_2': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
     # 策略网络学习率
-    actor_lr = 5e-4
+    actor_lr = 1e-3
     # 价值网络学习率
-    critic_lr = 5e-3
+    critic_lr = 1e-3
     # 迭代次数
     num_episodes = 10000
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 64
+    hidden_dim = 128
     # 折扣因子
-    gamma = 0.98
-    # 软更新参数
+    gamma = 0.99
+    # 软更新参数 原来为0.005
     tau = 0.005
     # 经验回放池大小
     buffer_size = 10000
@@ -39,17 +48,23 @@ if __name__ == '__main__':
     # 每一批次选取的经验数量
     batch_size = 64
     # 高斯噪声标准差
-    sigma = 0.01
+    sigma = 0.05
     # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
-    state_dim = 140
+    state_dim = 744
+    # 最大贪心次数
+    max_eps_episode = 50
+    # 最小贪心概率
+    min_eps = 0.2
     # 暂定直接控制智能体的位移，所以是三维的
     action_dim = 3
     # 每一次迭代中，无人机的数量
     num_uavs = 30
     # 无人机可控风速
     v0 = 40
+    max_eps_episode = 10  # 最大贪心次数
     # 设备
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    print("device:{}".format(device))
 
     # 智能体的半径（先暂时定义为球体）
     agent_r = 1
@@ -65,8 +80,9 @@ if __name__ == '__main__':
 
     # 实例化DDPG对象，其实动作为非离散，所以为False
     agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
-                 action_bound, sigma, actor_lr, critic_lr, tau, gamma, device)
-    return_list = tools.train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load)
+                 action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, device)
+    return_list = tools.train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
+                                               max_eps_episode, min_eps, action_bound, device)
 
     # 绘图
     episodes_list = list(range(len(return_list)))
