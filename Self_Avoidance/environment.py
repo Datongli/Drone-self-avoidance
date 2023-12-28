@@ -6,6 +6,7 @@ import numpy as np
 import math
 import random
 import UAV
+import matplotlib.pyplot as plt
 
 
 def calculate_distance(point1, point2):
@@ -72,6 +73,9 @@ class Environment:
         self.num_uavs = num_nuvs
         # 无人机可控风速
         self.v0 = v0
+        self.fig = plt.figure()  # 创建一个新的图形窗口并存储在self.fig中
+        # 在图形窗口添加一个3D投影子图
+        self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
 
     def reset(self):
         """
@@ -184,6 +188,41 @@ class Environment:
         reward, done, info = self.uavs[i].update(action)
         next_state = self.uavs[i].state()
         return next_state, reward, done, info
+
+    def render(self, flag=0):
+        """
+        绘制封闭的立方体的函数，用于查验模型的性能
+        :param flag:是否是第一次渲染
+        :return:绘图
+        """
+        if flag == 1:
+            for building in self.bds:
+                # 绘画出所有建筑
+                x = building.x
+                y = building.y
+                z = 0
+                dx = building.length
+                dy = building.width
+                dz = building.height
+                xx = np.linspace(x - dx, x + dx, 2)
+                yy = np.linspace(y - dy, y + dy, 2)
+                zz = np.linspace(z, z + dz, 2)
+                xx2, yy2 = np.meshgrid(xx, yy)
+                self.ax.plot_surface(xx2, yy2, np.full_like(xx2, z))
+                self.ax.plot_surface(xx2, yy2, np.full_like(xx2, z + dz))
+                yy2, zz2 = np.meshgrid(yy, zz)
+                self.ax.plot_surface(np.full_like(yy2, x - dx), yy2, zz2)
+                self.ax.plot_surface(np.full_like(yy2, x + dx), yy2, zz2)
+                xx2, zz2 = np.meshgrid(xx, zz)
+                self.ax.plot_surface(xx2, np.full_like(yy2, y - dy), zz2)
+                self.ax.plot_surface(xx2, np.full_like(yy2, y + dy), zz2)
+                sn = self.target
+                # 绘制目标坐标点
+                self.ax.scatter(sn.x, sn.y, sn.z, c='red')
+        for uav in self.uavs:
+            # 绘制无人机坐标点
+            self.ax.scatter(uav.x, uav.y, uav.z, c='blue')
+
 
 
 if __name__ == "__main__":
