@@ -10,9 +10,8 @@ import matplotlib.pyplot as plt
 import tools
 from DDPG import DDPG
 import environment
-
-import matplotlib
-matplotlib.use('TkAgg')  # 或者其他后端
+# import matplotlib
+# matplotlib.use('TkAgg')  # 或者其他后端
 
 
 if __name__ == '__main__':
@@ -20,10 +19,10 @@ if __name__ == '__main__':
     retrain = True
     print("hello")
     # pth文件保存的位置
-    pth_load = {'actor': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\actor.pth',
-                'critic': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\critic.pth',
-                'target_actor': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
-                'target_critic': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
+    pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
+                'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
+                'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
+                'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
     # pth_load = {'actor': r'D:\ldt\Drone_self_avoidance\Self_Avoidance\actor.pth',
     #             "critic_1": r'D:\ldt\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
     #             "critic_2": r'D:\ldt\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
@@ -48,20 +47,19 @@ if __name__ == '__main__':
     # 每一批次选取的经验数量
     batch_size = 64
     # 高斯噪声标准差
-    sigma = 0.05
+    sigma = 0.01
     # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
     state_dim = 744
-    # 最大贪心次数
-    max_eps_episode = 50
+    # 最大贪心次数，为0是直接根据Q值来选取的动作
+    max_eps_episode = 0
     # 最小贪心概率
-    min_eps = 0.2
+    min_eps = 0
     # 暂定直接控制智能体的位移，所以是三维的
     action_dim = 3
     # 每一次迭代中，无人机的数量
     num_uavs = 30
     # 无人机可控风速
     v0 = 40
-    max_eps_episode = 10  # 最大贪心次数
     # 设备
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print("device:{}".format(device))
