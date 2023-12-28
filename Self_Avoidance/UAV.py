@@ -36,6 +36,7 @@ class UAV:
         self.p_crash = 0  # 无人机坠毁概率
         self.done = False  # 终止状态
         self.nearest_distance = 10  # 最近的障碍物的距离
+        self.obstacle_num = 0
         # 无人机初始状态距离目标点的距离
         self.d_origin = math.sqrt((self.x - self.env.target.x) ** 2 + (self.y - self.env.target.y) ** 2 + (self.z - self.env.target.z) ** 2)
         # 无人机当前距离目标点的距离
@@ -43,6 +44,15 @@ class UAV:
         # 无人机的感受野，注意，为了节省算力，无人机的可视范围定为了2，长宽高方向上都是2，2+1+2=5 5^3-1=124
         # 124个点的解释：5层，每层25个点，去掉中间的一个（无人机占据）
         self.ob_space = np.zeros(124)  # 无人机邻近栅格障碍物情况
+        # 无人机从环境中得到的奖励
+        self.reward = []
+        # 一些想要被观测到的值
+        self.r_climb = []
+        self.r_target = []
+        self.r_e = []
+        self.c_p_crash = []
+        self.action = []
+        self.r_n_distance = []
 
     def state(self):
         """
@@ -53,17 +63,28 @@ class UAV:
         dx = self.env.target.x - self.x
         dy = self.env.target.y - self.y
         dz = self.env.target.z - self.z
+        area_x = self.env.action_area[1][0]
+        area_y = self.env.action_area[1][1]
+        area_z = self.env.action_area[1][2]
         # 状态网格
         state_grid = [self.x, self.y, self.z, dx, dy, dz,
                       self.env.target.x, self.env.target.y, self.env.target.z,
                       self.d_origin, self.step, self.distance, self.dir,
                       self.p_crash, self.now_bt, self.cost]
+        # state_grid = [self.x / area_x, self.y / area_y, self.z / area_z,
+        #               dx / area_x, dy / area_y, dz / area_z,
+        #               self.env.target.x / area_x, self.env.target.y / area_y, self.env.target.z / area_z,
+        #               self.d_origin / math.sqrt(area_x ** 2 + area_y ** 2 + area_z ** 2),
+        #               self.step / (2 * self.d_origin + 2 * area_z), self.distance / self.d_origin, self.dir,
+        #               self.p_crash, self.now_bt, self.cost / self.now_bt]
         # 更新邻近栅格状态
         self.ob_space = []
+        # 传感器点位是否有障碍
+        self.obstacle_num = 0
         # 根据无人机周围的环境，更新无人机感受野中的情况
-        for i in range(-2, 3):
-            for j in range(-2, 3):
-                for k in range(-2, 3):
+        for i in range(-4, 5):
+            for j in range(-4, 5):
+                for k in range(-4, 5):
                     # 将无人机原点扣掉
                     if i == 1 and j == 0 and k == 0:
                         continue
@@ -73,6 +94,7 @@ class UAV:
                             or self.z + k <= self.env.action_area[0][2] or self.z + k >= self.env.action_area[1][2]):
                         self.ob_space.append(1)
                         state_grid.append(1)
+                        self.obstacle_num += 1
                         continue
                     # 判断周围是否有建筑物
                     in_build = 0  # 有障碍物的标志
@@ -81,6 +103,7 @@ class UAV:
                                 and building.left_down[1] <= self.y + j <= building.right_up[1]
                                 and building.left_down[2] <= self.z + k <= building.right_up[2]):
                             in_build = 1
+                            self.obstacle_num += 1
                             break
                     if in_build == 0:
                         self.ob_space.append(0)
@@ -88,8 +111,8 @@ class UAV:
                     else:
                         self.ob_space.append(1)
                         state_grid.append(1)
-        # 得到无人机的初始状态
-        # 124+16=140
+        # 得到无人机的状态
+        # 728+16=744
         return state_grid
 
     def check_collision(self, sphere_center, sphere_radius, min_bound, max_bound):
@@ -118,6 +141,24 @@ class UAV:
         # 判断球体是否在立方体内或相交
         return distance <= sphere_radius, distance, dir_ob
 
+    def col_limit_distance(self, sphere_center):
+        """
+        判断无人机对象和六个边界的最近距离
+        :param sphere_center: 无人机的中心点，array类型的一维数组
+        :return: 无人机和边界的最近距离
+        """
+        # 用于承接距离的列表
+        distance = []
+        # xyz三维坐标
+        for i in range(3):
+            # 每个方向上两个边界
+            for j in range(2):
+                # 直接做减法即可
+                distance.append(abs(sphere_center[i] - self.env.action_area[j][i]))
+        # 返回最小距离
+        return min(distance)
+
+
     def update(self, action):
         """
         无人机状态等更新函数
@@ -130,8 +171,10 @@ class UAV:
         dx, dy, dz = [0, 0, 0]
         """相关参数"""
         b = 3  # 撞毁参数 原3
-        wt = 0.005  # 目标参数
+        # wt = 0.05  # 目标参数0.005
         wc = 0.07  # 爬升参数 原0.07
+        wx = 0.07  # x轴的接近系数
+        wy = 0.07  # y轴的接近系数
         we = 0.2  # 能量损耗参数  原0.2 ，0
         c = 0.05  # 风阻能耗参数 原0.05
         crash = 3  # 坠毁概率惩罚增益倍数 原3 ，0
@@ -140,7 +183,7 @@ class UAV:
         dy = action[1]
         dz = action[2]
         # 如果无人机静止不动，给予大量惩罚
-        if math.sqrt(dx ** 2 + dy ** 2 + dz ** 2) <= 0.1:
+        if math.sqrt(dx ** 2 + dy ** 2 + dz ** 2) <= 0.01:
             return -1000, False, False
         """更新无人机的坐标值"""
         self.x += dx
@@ -175,7 +218,7 @@ class UAV:
         # 无人机和最近建筑物的水平夹角
         dir_ob = 0
         collision_or_not = []
-        # 计算与障碍物之间的最短距离
+        """计算与障碍物之间的最短距离"""
         for building in self.env.bds:
             # 判断是否相撞同时求得无人机与建筑物之间的距离
             collision, build_distance, dir_bud = self.check_collision(np.array([self.x, self.y, self.z]), self.agent_r, building.left_down, building.right_up)
@@ -187,9 +230,15 @@ class UAV:
                 self.nearest_distance = build_distance
                 # 更新无人机与最近建筑物的水平夹角
                 dir_ob = dir_bud
+        """计算与六个边界的距离，同时更新最短距离"""
+        # 得到与六个边界的最近距离
+        limit_distance = self.col_limit_distance(np.array([self.x, self.y, self.z]))
+        if limit_distance <= self.nearest_distance:
+            # 更新最近距离
+            self.nearest_distance = limit_distance
         """计算坠毁概率p_crash"""
         # 如果最近距离大于6同时风速小于可控风速
-        if self.nearest_distance >= 5.5 and self.env.WindField[0] <= self.env.v0:
+        if self.nearest_distance >= 6.8 and self.env.WindField[0] <= self.env.v0:
             # 撞毁概率等于0
             self.p_crash = 0
         else:
@@ -199,7 +248,13 @@ class UAV:
                                     (0.5 * math.pow(self.env.WindField[0] *
                                     math.cos(abs(self.env.WindField[1] - dir_ob) - self.env.v0), 2)))
         # 计算爬升奖励    wc：爬升系数
-        r_climb = - wc * (abs(self.z - self.env.target.z))
+        r_climb = - wc * abs(self.z - self.env.target.z) - wy * abs(self.y - self.env.target.y) - wx * abs(self.x - self.env.target.x)
+        r_climb = 0
+        # 最小距离奖励
+        if self.nearest_distance >= 10:
+            r_n_distance = 0
+        else:
+            r_n_distance = - self.obstacle_num / 728.0 * 10 - 1 / self.nearest_distance * 50
         # 计算目标奖励
         if self.distance > 1:
             r_target = 2 * (self.d_origin / self.distance) * Ddistance
@@ -208,7 +263,15 @@ class UAV:
             r_target = 2 * (self.d_origin) * Ddistance
         """计算总奖励r"""
         # 爬升奖励+目标奖励+能耗奖励-坠毁系数*坠毁概率
+        # reword = r_climb + r_target + r_e - crash * self.p_crash + r_n_distance
         reword = r_climb + r_target + r_e - crash * self.p_crash
+        self.r_climb.append(r_climb)
+        self.r_target.append(r_target)
+        self.r_e.append(r_e)
+        self.c_p_crash.append(- crash * self.p_crash)
+        self.r_n_distance.append(r_n_distance)
+        # print(self.p_crash)
+        # print("reword:{}".format(reword))
         """终止状态判断"""
         if (self.x <= 1 or self.x >= self.env.action_area[1][0] - 1
                 or self.y <= 1 or self.y >= self.env.action_area[1][1] - 1
