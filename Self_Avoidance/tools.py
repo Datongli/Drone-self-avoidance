@@ -14,6 +14,7 @@ class ReplayBuffer:
     """
     经验回放池
     """
+
     def __init__(self, capacity):
         # 一个先进先出的队列
         # 创建了一个具有固定容量（capacity）的双端队列（deque）
@@ -83,7 +84,24 @@ def level_up(success_list):
         return False
 
 
-def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load):
+def epsilon_annealing(i_epsiode, max_episode, min_eps: float):
+    """
+    伊布西龙衰减函数，用于计算贪心概率
+    :param i_epsiode:当前的迭代次数
+    :param max_episode:最大的贪心次数
+    :param min_eps:最小的伊布西龙值，表示希望在训练结束时，模型趋向于完全贪心
+    :return:贪心概率
+    """
+    # 计算斜率，用于线性衰减
+    slope = (min_eps - 1.0) / max_episode
+    # 其实在当前的斜率（-0.099）下，迭代10次后，就已经为min_eps了
+    # 是一个先线性下降，再恒定的过程，最后恒定在0.01
+    ret_eps = max(slope * i_epsiode + 1.0, min_eps)
+    return ret_eps
+
+
+def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
+                           max_eps_episode, min_eps, action_bound, train_model, device):
     """
     用于离线策略的训练函数
     :param env:可以交互的环境实例
@@ -93,6 +111,12 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     :param minimal_size:经验回放池最小深度
     :param batch_size:训练批次的经验
     :param pth_load:pth文件的存放地址字典
+    :param retrain: 是否重新开始训练
+    :param max_eps_episode: 最大贪心次数
+    :param min_eps:最小贪心概率
+    :param action_bound:动作限制值
+    :param train_model:训练的模型是什么
+    :param device: 设备
     :return:训练的结果
     """
     """初始化一些结果列表"""
@@ -101,10 +125,10 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     # 记录每一次迭代，成功的无人机数量是否占到总数量的80%，用于判断等级是否提升
     success_list = []
     """加载存档点"""
-    if os.path.exists(pth_load['actor']):
+    if not retrain:
         for name, pth in pth_load.items():
             # 按照键名称取出存档点
-            check_point = torch.load(pth_load[name])
+            check_point = torch.load(pth_load[name], map_location=device)
             # 装载模型参数
             agent.net_dict[name].load_state_dict(check_point['model'])
             # 装载优化器
@@ -128,6 +152,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 over_count = 0  # 超过最大步长的无人机
                 epoch_all += 1  # 更新迭代总数
                 n_done = 0  # 达到终止状态的无人机数量（包括成功到达目标、坠毁、电量耗尽等）
+                state_bn = 0  # 状态量的批量，用于使用时给现有状态做归一化
                 # 得到状态的初始值，类型是np.ndarray
                 # 环境重置 state是以无人机数目为行数，140为列数的列表
                 state = env.reset()
@@ -137,17 +162,35 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         if env.uavs[i].done:
                             # 无人机已结束任务，跳过
                             continue
+                        # 更新步数，用于贪心策略的计算
+                        agent.step = j * num_episodes / 10 + i_episode
+                        # 判断经验回放池中经验的数量是否超过了最小值（运用bn层的添加）
+                        if replay_buffer.size() > minimal_size:
+                            agent.actor.train = True
+                            b_s, _, _, _, _ = replay_buffer.sample(batch_size)
+                            # 增加成二维的数组方便整合
+                            state_alone = np.array([state[i]])
+                            # 整合单独的状态和经验回放池中抽取的状态，用于应用
+                            state_input = np.vstack((state_alone, b_s[: -1]))
+                            # 更新状态批量
+                            state_bn = b_s[: -1]
+                        else:
+                            agent.actor.train = False
+                            state_input = state[i]
                         # 选择动作，类型为np.ndarray
-                        action = agent.take_action(state[i])[0]
+                        action = agent.take_action(state_input)[0]
                         # 得到下一个状态，奖励，是否完成，状态的类别（电量耗尽，坠机，到达目标点位等等）
                         next_state, reward, uav_done, info = env.step(action, i)  # 根据选取的动作改变状态，获取收益
+                        # 将环境给出的奖励放到无人机对象的奖励记录中，用于检查每一步的好坏
+                        env.uavs[i].reward.append(reward)
+                        env.uavs[i].action.append(action)
                         episode_return += reward  # 求总收益
                         # 将状态、动作、奖励、下一状态、是否结束 打包放入经验回放池
                         replay_buffer.add(state[i], action, reward, next_state, uav_done)
                         """判断状态的类别"""
                         if info == 1:
                             # 如果到达目标点，完成目标的无人机数量加1
-                            success_count = success_count + 1
+                            success_count += 1
                         elif info == 2:
                             # 如果发生碰撞，发生碰撞的无人机数量加1
                             crash_count += 1
@@ -165,9 +208,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                             n_done = n_done + 1
                             continue
                         # 状态变更
-                        # print(i)
-                        # print(len(state[i]), state[i])
-                        # print(len(next_state), next_state)
                         state[i] = next_state
                         # 如果达到经验回放池的最低要求
                     if replay_buffer.size() > minimal_size:
@@ -179,6 +219,16 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     # 如果一个批次的无人机全都训练完毕
                     if n_done == env.num_uavs:
                         break
+                # 打印每一个无人机的奖励，看看
+                # for uav in env.uavs:
+                #     print("reward:{}".format(uav.reward))
+                #     print("r_climb:{}".format(uav.r_climb))
+                #     print("r_target:{}".format(uav.r_target))
+                #     print("r_e:{}".format(uav.r_e))
+                #     print("c_p_crash:{}".format(uav.c_p_crash))
+                #     print("action:{}".format(uav.action))
+                #     print("state:{}".format(uav.now_state))
+                #     print("r_n_distance:{}".format(uav.r_n_distance))
                 # 如果有80%的无人机到达了目标区域
                 if success_count >= 0.8 * env.num_uavs and env.level < 10:
                     # 记为一次效果较好的迭代
@@ -195,21 +245,42 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         success_list = []
                 return_list.append(episode_return)
                 # 打印相关训练信息
-                print('\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'.\
-                      format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level, success_count, crash_count, bt_count, over_count))
+                print('\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'. \
+                    format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level, success_count,
+                           crash_count, bt_count, over_count))
                 # 保存模型参数
-                if i_episode % 100 == 0:
+                if i_episode % 10 == 0:
+                    # 保存批量状态，用于验证
+                    # 保存为 CSV 文件
+                    np.savetxt('state_bn.csv', state_bn, delimiter=',', fmt='%d')
                     # 每100周期保存一次网络参数
-                    state = {'model': agent.actor.state_dict(), 'optimizer': agent.actor_optimizer.state_dict(),
-                             'epoch': epoch_all}
-                    torch.save(state, pth_load['actor'])
-                    state = {'model': agent.critic.state_dict(), 'optimizer': agent.critic_optimizer.state_dict(),
-                             'epoch': epoch_all}
-                    torch.save(state, pth_load['critic'])
-                    state = {'model': agent.target_actor.state_dict(), 'epoch': epoch_all}
-                    torch.save(state, pth_load['target_actor'])
-                    state = {'model': agent.target_critic.state_dict(), 'epoch': epoch_all}
-                    torch.save(state, pth_load['target_critic'])
+                    if train_model == 'DDPG':
+                        state = {'model': agent.actor.state_dict(), 'optimizer': agent.actor_optimizer.state_dict(),
+                                 'epoch': epoch_all}
+                        torch.save(state, pth_load['actor'])
+                        state = {'model': agent.critic.state_dict(), 'optimizer': agent.critic_optimizer.state_dict(),
+                                 'epoch': epoch_all}
+                        torch.save(state, pth_load['critic'])
+                        state = {'model': agent.target_actor.state_dict(), 'epoch': epoch_all}
+                        torch.save(state, pth_load['target_actor'])
+                        state = {'model': agent.target_critic.state_dict(), 'epoch': epoch_all}
+                        torch.save(state, pth_load['target_critic'])
+                    if train_model == 'SAC':
+                        state = {'model': agent.actor.state_dict(), 'optimizer': agent.actor_optimizer.state_dict(),
+                                 'epoch': epoch_all}
+                        torch.save(state, pth_load['SAC_actor'])
+                        state = {'model': agent.critic_1.state_dict(),
+                                 'optimizer': agent.critic_1_optimizer.state_dict(),
+                                 'epoch': epoch_all}
+                        torch.save(state, pth_load['critic_1'])
+                        state = {'model': agent.critic_2.state_dict(),
+                                 'optimizer': agent.critic_2_optimizer.state_dict(),
+                                 'epoch': epoch_all}
+                        torch.save(state, pth_load['critic_2'])
+                        state = {'model': agent.target_critic_1.state_dict(), 'epoch': epoch_all}
+                        torch.save(state, pth_load['target_critic_1'])
+                        state = {'model': agent.target_critic_2.state_dict(), 'epoch': epoch_all}
+                        torch.save(state, pth_load['target_critic_2'])
                 # 绘制进度条相关的代码
                 if (i_episode + 1) % 10 == 0:
                     pbar.set_postfix({'episode': '%d' % (num_episodes / 10 * j + i_episode + 1),
