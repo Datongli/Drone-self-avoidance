@@ -7,6 +7,8 @@ from torch.distributions import Normal
 import matplotlib.pyplot as plt
 import torch.nn.init as init
 import tools
+# import torch.nn.utils.parametrizations.weight_norm as weight_norm
+import torch.nn.utils.weight_norm as weight_norm
 
 
 class PolicyNetContinuous(torch.nn.Module):
@@ -14,6 +16,7 @@ class PolicyNetContinuous(torch.nn.Module):
     定义策略网络，由于处理的是与连续动作交互的环境，
     策略网络输出一个高斯分布的均值和标准差来表示动作分布
     """
+
     def __init__(self, state_dim, hidden_dim, action_dim, action_bound):
         """
         初始化策略网络
@@ -23,10 +26,28 @@ class PolicyNetContinuous(torch.nn.Module):
         :param action_bound: 动作的最大值
         """
         super(PolicyNetContinuous, self).__init__()
-        self.fc1 = torch.nn.Linear(state_dim, hidden_dim)
-        self.fc_mu = torch.nn.Linear(hidden_dim, action_dim)
-        self.fc_std = torch.nn.Linear(hidden_dim, action_dim)
+        self.bn0 = nn.BatchNorm1d(state_dim)
+        self.fc1 = weight_norm(torch.nn.Linear(state_dim, 256))
+        self.bn1 = nn.BatchNorm1d(256)
+        self.fc2 = weight_norm(torch.nn.Linear(256, 512))
+        self.bn2 = nn.BatchNorm1d(512)
+        self.fc3 = weight_norm(torch.nn.Linear(512, 256))
+        self.bn3 = nn.BatchNorm1d(256)
+        self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
+        self.bn4 = nn.BatchNorm1d(hidden_dim)
+        self.fc_mu = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
+        self.fc_std = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.action_bound = action_bound
+        self.prelu = nn.PReLU()
+        self.train = True
+        self.init_weights()
+
+    def init_weights(self):
+        # 使用 Xavier/Glorot 初始化
+        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_mu, self.fc_std]:
+            if isinstance(layer, nn.Linear):
+                init.xavier_uniform_(layer.weight)
+                init.zeros_(layer.bias)
 
     def forward(self, x):
         """
@@ -35,7 +56,25 @@ class PolicyNetContinuous(torch.nn.Module):
         :return: 输出动作，对数概率密度
         """
         # 通过第一个全连接层并使用ReLU激活函数
-        x = nn.PReLU(self.fc1(x))
+        # x = nn.PReLU(self.fc1(x))
+        if self.train:
+            x = self.bn0(x)
+        x = self.fc1(x)
+        if self.train:
+            x = self.bn1(x)
+        x = self.prelu(x)
+        x = self.fc2(x)
+        if self.train:
+            x = self.bn2(x)
+        x = self.prelu(x)
+        x = self.fc3(x)
+        if self.train:
+            x = self.bn3(x)
+        x = self.prelu(x)
+        x = self.fc4(x)
+        if self.train:
+            x = self.bn4(x)
+        x = self.prelu(x)
         # 通过第二个全连接层获得均值
         mu = self.fc_mu(x)
         # 使用Softplus激活函数处理第三个全连接层的输出，得到标准差
@@ -44,16 +83,20 @@ class PolicyNetContinuous(torch.nn.Module):
         dist = Normal(mu, std)
         # 从正态分布中进行重参数化采样，以获得动作
         normal_sample = dist.rsample()
+        # print("mu:{}".format(mu))
+        # print("std:{}".format(std))
+        # print("normal_sample:{}".format(normal_sample))
         # 计算正态分布的对数概率密度
         log_prob = dist.log_prob(normal_sample)
         # 将采样得到的值通过tanh函数映射到[-1, 1]范围
         action = torch.tanh(normal_sample)
+        # print("action:{}".format(action))
         # 计算tanh_normal分布的对数概率密度
         log_prob = log_prob - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)
         # 将动作缩放到合适的范围
         action = action * self.action_bound
-        # 返回动作和对数概率（熵）
-        return action, log_prob
+        # 返回动作和对数概率（熵） 这里将三个维度上的动作的熵进行了加和
+        return action, torch.sum(log_prob, dim=1).view(-1, 1)
 
 
 class QValueNetContinuous(torch.nn.Module):
@@ -61,6 +104,7 @@ class QValueNetContinuous(torch.nn.Module):
     定义价值网络
     价值网络的输入是状态和动作的拼接向量，输出一个实数来表示动作价值
     """
+
     def __init__(self, state_dim, hidden_dim, action_dim):
         """
         初始化动作价值函数
@@ -69,9 +113,25 @@ class QValueNetContinuous(torch.nn.Module):
         :param action_dim: 动作纬度
         """
         super(QValueNetContinuous, self).__init__()
-        self.fc1 = torch.nn.Linear(state_dim + action_dim, hidden_dim)
-        self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc_out = torch.nn.Linear(hidden_dim, 1)
+        self.bn0 = nn.BatchNorm1d(state_dim + action_dim)
+        self.fc1 = weight_norm(torch.nn.Linear(state_dim + action_dim, 256))
+        self.bn1 = nn.BatchNorm1d(256)
+        self.fc2 = weight_norm(torch.nn.Linear(256, 512))
+        self.bn2 = nn.BatchNorm1d(512)
+        self.fc3 = weight_norm(torch.nn.Linear(512, 256))
+        self.bn3 = nn.BatchNorm1d(256)
+        self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
+        self.bn4 = nn.BatchNorm1d(hidden_dim)
+        self.fc_out = weight_norm(torch.nn.Linear(hidden_dim, 1))
+        self.prelu = nn.PReLU()
+        self.init_weights()
+
+    def init_weights(self):
+        # 使用 Xavier/Glorot 初始化
+        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_out]:
+            if isinstance(layer, nn.Linear):
+                init.xavier_uniform_(layer.weight)
+                init.zeros_(layer.bias)
 
     def forward(self, x, a):
         """
@@ -80,14 +140,26 @@ class QValueNetContinuous(torch.nn.Module):
         :param a: 相应状态下的动作值
         :return: 判断的价值
         """
-        cat = torch.cat([x, a], dim=1)
-        x = nn.PReLU(self.fc1(cat))
-        x = nn.PReLU(self.fc2(x))
+        x = torch.cat([x, a], dim=1)
+        x = self.bn0(x)
+        x = self.fc1(x)
+        x = self.bn1(x)
+        x = self.prelu(x)
+        x = self.fc2(x)
+        x = self.bn2(x)
+        x = self.prelu(x)
+        x = self.fc3(x)
+        x = self.bn3(x)
+        x = self.prelu(x)
+        x = self.fc4(x)
+        x = self.bn4(x)
+        x = self.prelu(x)
         return self.fc_out(x)
 
 
 class SACContinuous:
     """处理连续动作的SAC算法"""
+
     def __init__(self, state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr, alpha_lr,
                  target_entropy, tau, gamma, max_eps_episode, min_eps, device):
         """
@@ -104,6 +176,7 @@ class SACContinuous:
         :param gamma:折扣因子
         :param max_eps_episode:最大贪心次数
         :param min_eps:最小贪心概率
+        :param batch_size:批量数量
         :param device:设备
         """
         # 策略网络
@@ -139,7 +212,7 @@ class SACContinuous:
         self.action_bound = action_bound
         self.train = True
         # 可以被初始化的网络的字典，用于承接预训练的模型参数
-        self.net_dict = {'actor': self.actor,
+        self.net_dict = {'SAC_actor': self.actor,
                          "critic_1": self.critic_1,
                          "critic_2": self.critic_2,
                          'target_critic_1': self.target_critic_1,
@@ -155,10 +228,13 @@ class SACContinuous:
         :param state: 状态值
         :return: 动作值
         """
-        # state = torch.tensor([state], dtype=torch.float).to(self.device)
-        state = torch.tensor(np.array([state]), dtype=torch.float).to(self.device)
+        # 如果是网络的训练模式
+        if self.actor.train:
+            state = torch.tensor(state, dtype=torch.float).to(self.device)
+        else:
+            state = torch.tensor(np.array([state]), dtype=torch.float).to(self.device)
         # 采取动作
-        action = self.actor(state)[0]
+        action = self.actor(state)[0].detach().cpu().numpy()
         # 提取动作张量中的数值，并将其作为单一元素构成的列表返回
         return np.array(action)
 
@@ -178,21 +254,21 @@ class SACContinuous:
                 eps = tools.epsilon_annealing(self.step, self.max_eps_episode, self.min_eps)
             else:
                 eps = self.min_eps
-        # 生成一个在[0,1)范围内的随机数
-        sample = random.random()
-        # 如果不进行随机探索或者概率大于了贪心策略概率，就不进行探索，直接通过最大的Q值来选择动作
-        if sample > eps:
-            with torch.no_grad():
-                # 根据Q值选择行为   Variable等效与torch.tensor
-                action = self.normal_take_action(state)
-        else:
-            # 随机选取动作
-            action = []
-            for _ in range(3):
-                # 随机选择动作
-                action.append(random.random() * self.action_bound)
-            # 为了配合tool做的改变
-            action = np.array([action])
+            # 生成一个在[0,1)范围内的随机数
+            sample = random.random()
+            # 如果不进行随机探索或者概率大于了贪心策略概率，就不进行探索，直接通过最大的Q值来选择动作
+            if sample > eps:
+                with torch.no_grad():
+                    # 根据Q值选择行为   Variable等效与torch.tensor
+                    action = self.normal_take_action(state)
+            else:
+                # 随机选取动作
+                action = []
+                for _ in range(3):
+                    # 随机选择动作
+                    action.append(random.random() * self.action_bound)
+                # 为了配合tool做的改变
+                action = np.array([action])
         return action
 
     def calc_target(self, rewards, next_states, dones):
@@ -234,7 +310,7 @@ class SACContinuous:
         :return:
         """
         states = torch.tensor(transition_dict['states'], dtype=torch.float).to(self.device)
-        actions = torch.tensor(transition_dict['actions'], dtype=torch.float).view(-1, 1).to(self.device)
+        actions = torch.tensor(np.array(transition_dict['actions']), dtype=torch.float).to(self.device)
         rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(self.device)
         next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
@@ -265,3 +341,7 @@ class SACContinuous:
         self.log_alpha_optimizer.step()
         self.soft_update(self.critic_1, self.target_critic_1)
         self.soft_update(self.critic_2, self.target_critic_2)
+
+
+if __name__ == '__main__':
+    pass
