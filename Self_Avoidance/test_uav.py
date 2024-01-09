@@ -1,0 +1,130 @@
+"""
+用于进行生成实际环境，并对保存的参数进行测试的文件
+"""
+import numpy as np
+
+from environment import *
+import torch
+from DDPG import *
+import matplotlib
+from SAC import *
+
+matplotlib.use('TkAgg')  # 或者其他后端
+
+# 选择模型
+test_model = 'SAC'
+# 策略网络学习率
+actor_lr = 5e-4
+# 价值网络学习率
+critic_lr = 5e-3
+# 迭代次数
+num_episodes = 10000
+# 隐藏节点，先暂定64，后续可以看看效果
+hidden_dim = 128
+# 折扣因子
+gamma = 0.98
+# 软更新参数
+tau = 0.005
+# 经验回放池大小
+buffer_size = 10000
+# 经验回放池最小经验数目
+minimal_size = 100
+# 每一批次选取的经验数量
+batch_size = 64
+# 高斯噪声标准差
+sigma = 0.01
+# 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
+state_dim = 42
+# 暂定直接控制智能体的位移，所以是三维的
+action_dim = 3
+# 每一次迭代中，无人机的数量
+num_uavs = 30
+# 无人机可控风速
+v0 = 40
+# 设备
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+# 智能体的半径（先暂时定义为球体）
+agent_r = 1
+# 动作区域
+action_area = np.array([[0, 0, 0], [100, 100, 25]])
+# 动作最大值
+action_bound = 0.5
+# 目标熵，用于SAC算法
+target_entropy = - action_dim
+# SAC模型中的alpha参数学习率
+alpha_lr = 3e-4
+# 最大贪心次数
+max_eps_episode = 0
+# 最小贪心概率
+min_eps = 0
+regularization_strength = 1e-3
+
+
+if __name__ == '__main__':
+    if test_model == 'DDPG':
+        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
+                     action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, regularization_strength, device)
+        pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
+                    'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
+                    'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
+                    'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
+        # agent.actor.load_state_dict(torch.load(pth_load['actor'])['model'])
+        # agent.critic.load_state_dict(torch.load(pth_load['critic'])['model'])
+        # agent.target_actor.load_state_dict(torch.load(pth_load['target_actor'])['model'])
+        # agent.target_critic.load_state_dict(torch.load(pth_load['target_critic'])['model'])
+        # agent.actor_optimizer.load_state_dict(torch.load(pth_load['actor'])['optimizer'])
+        # agent.critic_optimizer.load_state_dict(torch.load(pth_load['critic'])['optimizer'])
+    if test_model == 'SAC':
+        agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
+                              alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, device)
+        pth_load = {'SAC_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\SAC_actor.pth',
+                    "critic_1": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
+                    "critic_2": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
+                    'target_critic_1': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_1.pth',
+                    'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
+    # 将算法切换至验证状态
+    agent.train = False
+    env = Environment(agent_r, action_area, num_uavs, v0)
+    for name, pth in pth_load.items():
+        # 按照键名称取出存档点
+        check_point = torch.load(pth_load[name], map_location=device)
+        # 装载模型参数
+        agent.net_dict[name].load_state_dict(check_point['model'])
+    # 真实场景运行
+    env.level = 1  # 环境难度等级
+    env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
+    state = env.reset()  # 环境重置
+    # 从 CSV 文件中加载数据
+    state_bn = np.loadtxt('state_bn.csv', delimiter=',')
+    state_input = np.vstack((state, state_bn))
+    total_reward = 0
+    env.render(1)  # 绘制并渲染建筑物
+
+    n_done = 0
+    count = 0
+    n_test = 1  # 测试次数
+    n_creash = 0  # 坠毁数目
+
+    for i in range(n_test):
+        while (1):
+            if env.uavs[0].done:
+                # 无人机已结束任务，跳过
+                break
+            action = agent.take_action(state_input)[0]
+            # 根据选取的动作改变状态，获取收益
+            next_state, reward, uav_done, info = env.step(action, 0)
+            # 求总收益
+            total_reward += reward
+            print("=" * 100)
+            print(action)
+            print(reward)
+            env.render()
+            plt.pause(0.01)
+            if uav_done:
+                break
+            state[0] = next_state  # 状态变更
+
+        print(env.uavs[0].step)
+        env.ax.scatter(env.target.x, env.target.y, env.target.z, c='red')
+        plt.pause(100)
