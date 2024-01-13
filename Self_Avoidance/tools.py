@@ -139,6 +139,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     else:
         # 注意这里，如果权重不存在，需要先给迭代次数置0
         epoch_all = 0
+    # 打印模型的参数
     """迭代训练过程"""
     for j in range(10):
         # 显示10个进度条
@@ -166,7 +167,8 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         agent.step = j * num_episodes / 10 + i_episode
                         # 判断经验回放池中经验的数量是否超过了最小值（运用bn层的添加）
                         if replay_buffer.size() > minimal_size:
-                            agent.actor.train = True
+                            # agent.actor.train = True
+                            agent.actor.train()
                             b_s, _, _, _, _ = replay_buffer.sample(batch_size)
                             # 增加成二维的数组方便整合
                             state_alone = np.array([state[i]])
@@ -175,12 +177,15 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                             # 更新状态批量
                             state_bn = b_s[: -1]
                         else:
-                            agent.actor.train = False
+                            # agent.actor.train = False
+                            agent.actor.eval()
                             state_input = state[i]
+                            state_input = torch.unsqueeze(state_input, dim=0)
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
                         # 得到下一个状态，奖励，是否完成，状态的类别（电量耗尽，坠机，到达目标点位等等）
                         next_state, reward, uav_done, info = env.step(action, i)  # 根据选取的动作改变状态，获取收益
+                        env.uavs[i].info = info
                         # 将环境给出的奖励放到无人机对象的奖励记录中，用于检查每一步的好坏
                         env.uavs[i].reward.append(reward)
                         env.uavs[i].action.append(action)
@@ -220,15 +225,19 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     if n_done == env.num_uavs:
                         break
                 # 打印每一个无人机的奖励，看看
-                # for uav in env.uavs:
-                #     print("reward:{}".format(uav.reward))
-                #     print("r_climb:{}".format(uav.r_climb))
-                #     print("r_target:{}".format(uav.r_target))
-                #     print("r_e:{}".format(uav.r_e))
-                #     print("c_p_crash:{}".format(uav.c_p_crash))
-                #     print("action:{}".format(uav.action))
-                #     print("state:{}".format(uav.now_state))
-                #     print("r_n_distance:{}".format(uav.r_n_distance))
+                for uav in env.uavs:
+                    # print("reward:{}".format(uav.reward))
+                    #     print("r_climb:{}".format(uav.r_climb))
+                    #     print("r_target:{}".format(uav.r_target))
+                    #     print("r_e:{}".format(uav.r_e))
+                    #     print("c_p_crash:{}".format(uav.c_p_crash))
+                    #     print("action:{}".format(uav.action))
+                    #     print("r_n_distance:{}".format(uav.r_n_distance))
+                    # 不看撞毁的
+                    if uav.info == 2:
+                        continue
+                    print("state:{}".format(uav.now_state))
+                    #     print("r_n_distance:{}".format(uav.r_n_distance))
                 # 如果有80%的无人机到达了目标区域
                 if success_count >= 0.8 * env.num_uavs and env.level < 10:
                     # 记为一次效果较好的迭代
@@ -245,11 +254,12 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         success_list = []
                 return_list.append(episode_return)
                 # 打印相关训练信息
-                print('\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'. \
+                print(
+                    '\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'. \
                     format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level, success_count,
                            crash_count, bt_count, over_count))
                 # 保存模型参数
-                if i_episode % 10 == 0:
+                if (i_episode + 1) % 10 == 0:
                     # 保存批量状态，用于验证
                     # 保存为 CSV 文件
                     np.savetxt('state_bn.csv', state_bn, delimiter=',', fmt='%d')

@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # 是否不加载权重，重新开始训练
     retrain = True
     # 选择训练模型是DDPG还是SAC
-    train_model = 'SAC'
+    train_model = 'DDPG'
     # 策略网络学习率
     actor_lr = 1e-4
     # 价值网络学习率
@@ -42,8 +42,8 @@ if __name__ == '__main__':
     minimal_size = batch_size
     # 高斯噪声标准差
     sigma = 0.01
-    # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
-    state_dim = 42
+    # 三维环境下动作，加上一堆状态的感知，目前是15+26=41个
+    state_dim = 41
     # 最大贪心次数，为0是直接根据Q值来选取的动作
     max_eps_episode = 10
     # 最小贪心概率

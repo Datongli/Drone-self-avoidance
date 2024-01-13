@@ -65,8 +65,6 @@ class Environment:
         self.level = 1
         # 无人机对象的集合，为了提升效率，每次不单单使用一个无人机进行搜索，可以是多个
         self.uavs = []
-        # 风场(风速,风向角)先默认为水平风
-        self.WindField = [30.0, 0.0]
         # 建筑集合
         self.bds = []
         # 训练环境中的无人机个数

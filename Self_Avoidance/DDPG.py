@@ -26,18 +26,24 @@ class LayerFC(torch.nn.Module):
         super(LayerFC, self).__init__()
         self.bn0 = nn.BatchNorm1d(num_in)
         self.fc1 = weight_norm(torch.nn.Linear(num_in, 128))
+        # self.fc1 = torch.nn.Linear(num_in, 128)
         self.bn1 = nn.BatchNorm1d(128)
         self.fc2 = weight_norm(torch.nn.Linear(128, 256))
+        # self.fc2 = torch.nn.Linear(128, 256)
         self.bn2 = nn.BatchNorm1d(256)
         self.fc3 = weight_norm(torch.nn.Linear(256, 128))
+        # self.fc3 = torch.nn.Linear(256, 128)
         self.bn3 = nn.BatchNorm1d(128)
         self.fc4 = weight_norm(torch.nn.Linear(128, hidden_dim))
+        # self.fc4 = torch.nn.Linear(128, hidden_dim)
         self.bn4 = nn.BatchNorm1d(hidden_dim)
         self.fc5 = weight_norm(torch.nn.Linear(hidden_dim, num_out))
+        # self.fc5 = torch.nn.Linear(hidden_dim, num_out)
         self.activation = activation
-        self.prelu = nn.PReLU()
+        # self.prelu = nn.PReLU()
+        self.prelu = torch.tanh
         self.out_fn = out_fn
-        self.train = True
+        # self.train = True
         self.scale_factor = nn.Parameter(torch.tensor([random.random() for _ in range(3)]), requires_grad=True)
         self.init_weights()
 
@@ -49,28 +55,45 @@ class LayerFC(torch.nn.Module):
                 init.zeros_(layer.bias)
 
     def forward(self, x):
-        if self.train:
-            x = self.bn0(x)
+        """原版"""
+        # # print("最初的x:{}".format(x))
+        # if self.train:
+        #     x = self.bn0(x)
+        #     # print("经过bn之后的x:{}".format(x))
+        # x = self.fc1(x)
+        # # print("经过第一个全连接后:{}".format(x))
+        # if self.train:
+        #     x = self.bn1(x)
+        # x = self.prelu(x)
+        # x = self.fc2(x)
+        # if self.train:
+        #     x = self.bn2(x)
+        # x = self.prelu(x)
+        # x = self.fc3(x)
+        # if self.train:
+        #     x = self.bn3(x)
+        # x = self.prelu(x)
+        # x = self.fc4(x)
+        # if self.train:
+        #     x = self.bn4(x)
+        # x = self.prelu(x)
+        # # print("$" * 100)
+        # # print("PRelu(self.fc4):{}".format(x))
+        # # print("self.fc5:{}".format(self.fc5(x)))
+        """尝试"""
+        x = self.bn0(x)
         x = self.fc1(x)
-        if self.train:
-            x = self.bn1(x)
+        x = self.bn1(x)
         x = self.prelu(x)
         x = self.fc2(x)
-        if self.train:
-            x = self.bn2(x)
+        x = self.bn2(x)
         x = self.prelu(x)
         x = self.fc3(x)
-        if self.train:
-            x = self.bn3(x)
+        x = self.bn3(x)
         x = self.prelu(x)
         x = self.fc4(x)
-        if self.train:
-            x = self.bn4(x)
+        x = self.bn4(x)
         x = self.prelu(x)
-        # print("$" * 100)
-        # print("PRelu(self.fc4):{}".format(x))
-        # print("self.fc5:{}".format(self.fc5(x)))
-        # 乘以一个自适应的放缩
         x = self.out_fn(self.fc5(x))
         # x = self.out_fn(self.fc5(x) * self.scale_factor.unsqueeze(0))
         # print("自适应放缩为：{}".format(self.scale_factor))

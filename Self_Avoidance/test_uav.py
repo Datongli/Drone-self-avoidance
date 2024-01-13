@@ -12,7 +12,7 @@ from SAC import *
 matplotlib.use('TkAgg')  # 或者其他后端
 
 # 选择模型
-test_model = 'SAC'
+test_model = 'DDPG'
 # 策略网络学习率
 actor_lr = 5e-4
 # 价值网络学习率
@@ -34,7 +34,7 @@ batch_size = 64
 # 高斯噪声标准差
 sigma = 0.01
 # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
-state_dim = 42
+state_dim = 41
 # 暂定直接控制智能体的位移，所以是三维的
 action_dim = 3
 # 每一次迭代中，无人机的数量
@@ -55,9 +55,9 @@ target_entropy = - action_dim
 # SAC模型中的alpha参数学习率
 alpha_lr = 3e-4
 # 最大贪心次数
-max_eps_episode = 0
+max_eps_episode = 10
 # 最小贪心概率
-min_eps = 0
+min_eps = 0.1
 regularization_strength = 1e-3
 
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                     'target_critic_1': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_1.pth',
                     'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
     # 将算法切换至验证状态
-    agent.train = False
+    # agent.train = False
     env = Environment(agent_r, action_area, num_uavs, v0)
     for name, pth in pth_load.items():
         # 按照键名称取出存档点
@@ -117,6 +117,7 @@ if __name__ == '__main__':
             # 求总收益
             total_reward += reward
             print("=" * 100)
+            print(env.uavs[0].x, env.uavs[0].y, env.uavs[0].z)
             print(action)
             print(reward)
             env.render()
