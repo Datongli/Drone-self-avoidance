@@ -167,19 +167,20 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         agent.step = j * num_episodes / 10 + i_episode
                         # 判断经验回放池中经验的数量是否超过了最小值（运用bn层的添加）
                         if replay_buffer.size() > minimal_size:
-                            # agent.actor.train = True
                             agent.actor.train()
                             b_s, _, _, _, _ = replay_buffer.sample(batch_size)
                             # 增加成二维的数组方便整合
                             state_alone = np.array([state[i]])
                             # 整合单独的状态和经验回放池中抽取的状态，用于应用
                             state_input = np.vstack((state_alone, b_s[: -1]))
+                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
                             # 更新状态批量
                             state_bn = b_s[: -1]
                         else:
-                            # agent.actor.train = False
                             agent.actor.eval()
                             state_input = state[i]
+                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
+                            # 增加一个维度
                             state_input = torch.unsqueeze(state_input, dim=0)
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
@@ -237,6 +238,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     if uav.info == 2:
                         continue
                     print("state:{}".format(uav.now_state))
+                    print("action:{}".format(uav.action))
                     #     print("r_n_distance:{}".format(uav.r_n_distance))
                 # 如果有80%的无人机到达了目标区域
                 if success_count >= 0.8 * env.num_uavs and env.level < 10:
@@ -261,8 +263,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 # 保存模型参数
                 if (i_episode + 1) % 10 == 0:
                     # 保存批量状态，用于验证
-                    # 保存为 CSV 文件
-                    np.savetxt('state_bn.csv', state_bn, delimiter=',', fmt='%d')
                     # 每100周期保存一次网络参数
                     if train_model == 'DDPG':
                         state = {'model': agent.actor.state_dict(), 'optimizer': agent.actor_optimizer.state_dict(),
