@@ -25,26 +25,25 @@ class LayerFC(torch.nn.Module):
         """
         super(LayerFC, self).__init__()
         self.bn0 = nn.BatchNorm1d(num_in)
-        self.fc1 = weight_norm(torch.nn.Linear(num_in, 128))
-        # self.fc1 = torch.nn.Linear(num_in, 128)
+        # self.fc1 = weight_norm(torch.nn.Linear(num_in, 128))
+        self.fc1 = torch.nn.Linear(num_in, 128)
         self.bn1 = nn.BatchNorm1d(128)
-        self.fc2 = weight_norm(torch.nn.Linear(128, 256))
-        # self.fc2 = torch.nn.Linear(128, 256)
+        # self.fc2 = weight_norm(torch.nn.Linear(128, 256))
+        self.fc2 = torch.nn.Linear(128, 256)
         self.bn2 = nn.BatchNorm1d(256)
-        self.fc3 = weight_norm(torch.nn.Linear(256, 128))
-        # self.fc3 = torch.nn.Linear(256, 128)
+        # self.fc3 = weight_norm(torch.nn.Linear(256, 128))
+        self.fc3 = torch.nn.Linear(256, 128)
         self.bn3 = nn.BatchNorm1d(128)
-        self.fc4 = weight_norm(torch.nn.Linear(128, hidden_dim))
-        # self.fc4 = torch.nn.Linear(128, hidden_dim)
+        # self.fc4 = weight_norm(torch.nn.Linear(128, hidden_dim))
+        self.fc4 = torch.nn.Linear(128, hidden_dim)
         self.bn4 = nn.BatchNorm1d(hidden_dim)
-        self.fc5 = weight_norm(torch.nn.Linear(hidden_dim, num_out))
-        # self.fc5 = torch.nn.Linear(hidden_dim, num_out)
+        # self.fc5 = weight_norm(torch.nn.Linear(hidden_dim, num_out))
+        self.fc5 = torch.nn.Linear(hidden_dim, num_out)
         self.activation = activation
-        # self.prelu = nn.PReLU()
-        self.prelu = torch.tanh
+        self.prelu = nn.PReLU()
+        # self.prelu = torch.tanh
         self.out_fn = out_fn
-        # self.train = True
-        self.scale_factor = nn.Parameter(torch.tensor([random.random() for _ in range(3)]), requires_grad=True)
+        # self.scale_factor = nn.Parameter(torch.tensor([random.random() for _ in range(3)]), requires_grad=True)
         self.init_weights()
 
     def init_weights(self):
@@ -55,33 +54,9 @@ class LayerFC(torch.nn.Module):
                 init.zeros_(layer.bias)
 
     def forward(self, x):
-        """原版"""
-        # # print("最初的x:{}".format(x))
-        # if self.train:
-        #     x = self.bn0(x)
-        #     # print("经过bn之后的x:{}".format(x))
-        # x = self.fc1(x)
-        # # print("经过第一个全连接后:{}".format(x))
-        # if self.train:
-        #     x = self.bn1(x)
-        # x = self.prelu(x)
-        # x = self.fc2(x)
-        # if self.train:
-        #     x = self.bn2(x)
-        # x = self.prelu(x)
-        # x = self.fc3(x)
-        # if self.train:
-        #     x = self.bn3(x)
-        # x = self.prelu(x)
-        # x = self.fc4(x)
-        # if self.train:
-        #     x = self.bn4(x)
-        # x = self.prelu(x)
-        # # print("$" * 100)
-        # # print("PRelu(self.fc4):{}".format(x))
-        # # print("self.fc5:{}".format(self.fc5(x)))
-        """尝试"""
+        # print("输入的x：{}".format(x))
         x = self.bn0(x)
+        # print("通过bn之后的x:{}".format(x))
         x = self.fc1(x)
         x = self.bn1(x)
         x = self.prelu(x)
@@ -93,11 +68,12 @@ class LayerFC(torch.nn.Module):
         x = self.prelu(x)
         x = self.fc4(x)
         x = self.bn4(x)
+        # print("self.bn4:{}".format(x))
         x = self.prelu(x)
+        # print("self.prelu:{}".format(x))
+        # print("self.fc5:{}".format(self.fc5(x)))
         x = self.out_fn(self.fc5(x))
-        # x = self.out_fn(self.fc5(x) * self.scale_factor.unsqueeze(0))
-        # print("自适应放缩为：{}".format(self.scale_factor))
-        # print("输出x为：{}".format(x))
+        # print("输出x:{}".format(x))
         return x
 
 
@@ -107,7 +83,7 @@ class DDPG:
     """
     def __init__(self, num_in_actor, num_out_actor, num_in_critic, hidden_dim, discrete,
                  action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps,
-                 regularization_strength, device):
+                 regularization_strength, wd, device):
         """
         初始化DDPG算法
         :param num_in_actor:策略网络输入节点（状态维度）
@@ -124,7 +100,7 @@ class DDPG:
         :param max_eps_episode:最大贪心次数
         :param min_eps:最小贪心概率
         :param regularization_strength:正则化强度
-        :param batch_size:批量数量
+        :param wd:正则化强度
         :param device:设备
         """
         out_fn = (lambda x: x) if discrete else (lambda x: torch.tanh(x) * action_bound)
@@ -136,8 +112,8 @@ class DDPG:
         self.target_critic.load_state_dict(self.critic.state_dict())
         # 初始化目标策略网络并设置和策略相同的参数
         self.target_actor.load_state_dict(self.actor.state_dict())
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr, weight_decay=wd)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr, weight_decay=wd)
         self.gamma = gamma
         # 高斯噪声的标准差，均值直接设为0
         self.sigma = sigma
@@ -165,12 +141,6 @@ class DDPG:
         :param state:状态值
         :return: 动作值
         """
-        # 如果是网络的训练模式
-        if self.actor.train:
-            state = torch.tensor(state, dtype=torch.float).to(self.device)
-        # 如果是网络的应用模式
-        else:
-            state = torch.tensor(np.array([state]), dtype=torch.float).to(self.device)
         action = self.actor(state).detach().cpu().numpy()
         # 给动作添加噪声，增加搜索
         # 正态分布产生随机数并乘以标准差
@@ -184,9 +154,8 @@ class DDPG:
         :return: 动作值
         """
         if self.max_eps_episode == 0:
-            with torch.no_grad():
-                # 调用不采用贪心策略下的选取动作
-                action = self.normal_take_action(state)
+            # 调用不采用贪心策略下的选取动作
+            action = self.normal_take_action(state)
         else:
             # 计算贪心概率
             if self.train:
@@ -197,9 +166,8 @@ class DDPG:
             sample = random.random()
             # 如果不进行随机探索或者概率大于了贪心策略概率，就不进行探索，直接通过最大的Q值来选择动作
             if sample > eps:
-                with torch.no_grad():
-                    # 根据Q值选择行为   Variable等效与torch.tensor
-                    action = self.normal_take_action(state)
+                # 根据Q值选择行为   Variable等效与torch.tensor
+                action = self.normal_take_action(state)
             else:
                 # 随机选取动作
                 action = []
@@ -245,7 +213,8 @@ class DDPG:
         # 梯度裁剪，可以在这里添加
         # for param in self.critic.parameters():
         #     torch.nn.utils.clip_grad_norm_(param, max_norm=1.0)
-        # self.critic_optimizer.step()
+        """很重要的优化器更新"""
+        self.critic_optimizer.step()
 
         # 见笔记上的注释
         # 计算并更新策略网络的损失
@@ -258,7 +227,8 @@ class DDPG:
         # 梯度裁剪，可以在这里添加
         # for param in self.actor.parameters():
         #     torch.nn.utils.clip_grad_norm_(param, max_norm=1.0)
-        # self.actor_optimizer.step()
+        """很重要的优化器更新"""
+        self.actor_optimizer.step()
 
         # 软更新策略网络
         self.soft_update(self.actor, self.target_actor)
