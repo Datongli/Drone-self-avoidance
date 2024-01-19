@@ -71,19 +71,8 @@ class UAV:
         closest_point = np.clip(sphere_center, min_bound, max_bound)
         # 计算球心到最近点的距离
         distance = np.linalg.norm(sphere_center - closest_point)
-        if distance <= sphere_radius:
-            dir_ob = 0
-        else:
-            # 计算球心和障碍物在水平面上投影的夹角  同时保证在（-1， 1）范围内，使反三角函数不会定义错误
-            if (sphere_center[0] - closest_point[0]) ** 2 + (sphere_center[1] - closest_point[1]) ** 2 == 0:
-                cosine_value = 1
-            else:
-                cosine_value = abs(sphere_center[0] - closest_point[0]) / ((sphere_center[0] - closest_point[0]) ** 2 + (sphere_center[1] - closest_point[1]) ** 2)
-            cosine_value = max(-1, min(1, cosine_value))
-            # 使用 math.acos
-            dir_ob = math.acos(cosine_value)
-        # 判断球体是否在立方体内或相交
-        return distance <= sphere_radius, distance, dir_ob
+        # 返回是否相撞、距离
+        return distance <= sphere_radius, distance
 
     def col_limit_distance(self, sphere_center):
         """
@@ -111,20 +100,11 @@ class UAV:
         dx = self.env.target.x - self.x
         dy = self.env.target.y - self.y
         dz = self.env.target.z - self.z
-        area_x = self.env.action_area[1][0]
-        area_y = self.env.action_area[1][1]
-        area_z = self.env.action_area[1][2]
         # 状态网格
         state_grid = [self.x, self.y, self.z, dx, dy, dz,
                       self.env.target.x, self.env.target.y, self.env.target.z,
                       self.d_origin, self.step, self.distance,
                       self.p_crash, self.now_bt, self.cost]
-        # state_grid = [self.x / area_x, self.y / area_y, self.z / area_z,
-        #               dx / area_x, dy / area_y, dz / area_z,
-        #               self.env.target.x / area_x, self.env.target.y / area_y, self.env.target.z / area_z,
-        #               self.d_origin / math.sqrt(area_x ** 2 + area_y ** 2 + area_z ** 2),
-        #               self.step / (2 * self.d_origin + 2 * area_z), self.distance / self.d_origin, self.dir,
-        #               self.p_crash, self.now_bt, self.cost / self.now_bt]
         # 更新邻近栅格状态
         self.ob_space = []
         # 传感器点位是否有障碍
@@ -141,7 +121,7 @@ class UAV:
                     # 判断与建筑物的最近距离
                     for building in self.env.bds:
                         # 计算距离建筑物的最近距离
-                        obstacle, build_distance, _ = self.check_collision(np.array([self.x + i, self.y + j, self.z + k]), self.agent_r, building.left_down, building.right_up)
+                        obstacle, build_distance = self.check_collision(np.array([self.x + i, self.y + j, self.z + k]), self.agent_r, building.left_down, building.right_up)
                         if build_distance <= nearest_distance:
                             # 更新最近距离
                             nearest_distance = build_distance
@@ -162,8 +142,6 @@ class UAV:
         """
         # 个人认为每次应该给它赋初值，不然就是上一个状态的最近距离
         self.nearest_distance = 5
-        # 更新无人机状态
-        dx, dy, dz = [0, 0, 0]
         """相关参数"""
         b = 3  # 撞毁参数 原3
         # wt = 0.05  # 目标参数0.005
@@ -171,15 +149,14 @@ class UAV:
         wy = 0.07
         wz = 0.07  # 爬升参数 原0.07
         we = 0.2  # 能量损耗参数  原0.2 ，0
-        c = 0.05  # 风阻能耗参数 原0.05
         crash = 3  # 坠毁概率惩罚增益倍数 原3 ，0
         """计算无人机坐标变更值"""
         dx = action[0]
         dy = action[1]
         dz = action[2]
-        # 如果无人机静止不动，给予大量惩罚
-        if math.sqrt(dx ** 2 + dy ** 2 + dz ** 2) <= 0.01:
-            return -1000, False, False
+        # 如果无人机静止不动，给予大量惩罚，但是可以继续运行
+        # if math.sqrt(dx ** 2 + dy ** 2 + dz ** 2) <= 0.1:
+        #     return -1000, False, False
         """更新无人机的坐标值"""
         self.x += dx
         self.y += dy
@@ -203,7 +180,7 @@ class UAV:
         """计算与障碍物之间的最短距离"""
         for building in self.env.bds:
             # 判断是否相撞同时求得无人机与建筑物之间的距离
-            collision, build_distance, _ = self.check_collision(np.array([self.x, self.y, self.z]), self.agent_r, building.left_down, building.right_up)
+            collision, build_distance = self.check_collision(np.array([self.x, self.y, self.z]), self.agent_r, building.left_down, building.right_up)
             # 得到是否与每一个建筑物相撞
             collision_or_not.append(collision)
             # 如果距离小于了最短距离
@@ -223,8 +200,8 @@ class UAV:
             self.p_crash = 0
         else:
             # 根据公式计算撞毁概率
-            # b:撞毁参数；v0:无人机可控风速
-            self.p_crash = math.exp(b * 1 / self.nearest_distance)
+            # b:撞毁参数；增加一个1e-5是为了防止出现除以0的现象
+            self.p_crash = math.exp(b * 1 / (self.nearest_distance + 0.1))
         # 计算爬升奖励    wc：爬升系数
         r_climb = -wx * abs(self.x - self.env.target.x) - wy * abs(self.y - self.env.target.y) - wz * abs(self.z - self.env.target.z)
         # 最小距离奖励
@@ -232,16 +209,11 @@ class UAV:
             r_n_distance = 0
         else:
             # 让这个奖励绝对值大于1
-            r_n_distance = -1 / self.nearest_distance * 10
+            r_n_distance = -1 / (self.nearest_distance + 1e-5) * 10
         # 计算目标奖励，感觉有可能是目标奖励不明显，如果动作量接近的非常小的话
         # 感觉应该更改一下目标奖励的计算方式
-        # if self.distance > 1:
-        #     r_target = 2 * (self.d_origin / self.distance) * Ddistance
-        # # 如果距离太近，已经是1了
-        # else:
-        #     r_target = 2 * self.d_origin * Ddistance
         if self.distance > 1:
-            r_target = 2 * (self.d_origin / self.distance)
+            r_target = 2 * (self.d_origin / self.distance) * Ddistance
         # 如果距离太近，已经是1了
         else:
             r_target = 2 * self.d_origin
@@ -263,17 +235,21 @@ class UAV:
                 or self.z <= 1 or self.z >= self.env.action_area[1][2] - 1
                 or True in collision_or_not):
             # 发生碰撞，产生巨大惩罚
-            return reword - 50000, True, 2
+            # 根据碰撞点距离目标的远近来设置奖励的大小
+            if self.distance <= 10:
+                return reword - 2000, True, 2
+            else:
+                return reword - 50000, True, 2
         if self.distance <= 4:
             # 到达目标点，给予大量奖励
             return reword + 50000, True, 1
         # 注意平衡探索步长和碰撞的关系
         if self.step >= 4 * self.d_origin + 4 * self.env.action_area[1][2]:
             # 步数超过最差步长（2*初始距离+2*空间高度），给予惩罚
-            return reword - 10, True, 5
+            return reword - 100, True, 5
         if self.cost > self.bt:
             # 电量耗尽，给予大量惩罚
-            return reword - 20, True, 3
+            return reword - 100, True, 3
         # 如果没有达到上述的终止状态，则继续运行
         return reword, False, 4
 
