@@ -141,7 +141,7 @@ class UAV:
         :return:奖励，是否结束一轮迭代，额外信息
         """
         # 个人认为每次应该给它赋初值，不然就是上一个状态的最近距离
-        self.nearest_distance = 5
+        self.nearest_distance = 10
         """相关参数"""
         b = 3  # 撞毁参数 原3
         # wt = 0.05  # 目标参数0.005
