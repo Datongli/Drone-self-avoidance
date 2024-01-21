@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # 是否不加载权重，重新开始训练
     retrain = True
     # 选择训练模型是DDPG还是SAC
-    train_model = 'DDPG'
+    train_model = 'SAC'
     # 策略网络学习率
     actor_lr = 1e-4
     # 价值网络学习率
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005
-    tau = 0.005
+    tau = 0.05
     # 每一批次选取的经验数量
     batch_size = 64
     # 经验回放池大小
@@ -45,17 +45,18 @@ if __name__ == '__main__':
     # 三维环境下动作，加上一堆状态的感知，目前是15+26=41个
     state_dim = 41
     # 最大贪心次数，为0是直接根据Q值来选取的动作
-    max_eps_episode = 10
+    max_eps_episode = 0
     # 最小贪心概率
-    min_eps = 0.1
+    min_eps = 0
     # 正则化强度
     regularization_strength = 0.05
+    wd = 0.02
     # 暂定直接控制智能体的位移，所以是三维的
     action_dim = 3
     # 目标熵，用于SAC算法
     target_entropy = - action_dim
     # 每一次迭代中，无人机的数量
-    num_uavs = 30
+    num_uavs = 15
     # 无人机可控风速
     v0 = 40
     # 设备
@@ -67,7 +68,7 @@ if __name__ == '__main__':
     # 动作区域
     action_area = np.array([[0, 0, 0], [100, 100, 25]])
     # 动作最大值
-    action_bound = 0.5
+    action_bound = 1.0
 
     # 实例化交互环境
     env = environment.Environment(agent_r, action_area, num_uavs, v0)
@@ -79,14 +80,14 @@ if __name__ == '__main__':
         # 实例化DDPG对象，其实动作为非离散，所以为False
         agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps,
-                     regularization_strength, device)
+                     regularization_strength, wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
                     'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
                     'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
     if train_model == 'SAC':
         agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
-                              alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, device)
+                              alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, wd, device)
         pth_load = {'SAC_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\SAC_actor.pth',
                     "critic_1": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
                     "critic_2": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
