@@ -142,6 +142,8 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     # 打印模型的参数
     """迭代训练过程"""
     for j in range(10):
+        # 找到nan出现的地方
+        # with torch.autograd.detect_anomaly():
         # 显示10个进度条
         with tqdm(total=int(num_episodes / 10), desc='Iteration %d' % j) as pbar:
             for i_episode in range(int(num_episodes / 10)):
@@ -153,7 +155,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 over_count = 0  # 超过最大步长的无人机
                 epoch_all += 1  # 更新迭代总数
                 n_done = 0  # 达到终止状态的无人机数量（包括成功到达目标、坠毁、电量耗尽等）
-                state_bn = 0  # 状态量的批量，用于使用时给现有状态做归一化
                 # 得到状态的初始值，类型是np.ndarray
                 # 环境重置 state是以无人机数目为行数，140为列数的列表
                 state = env.reset()
@@ -165,23 +166,12 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                             continue
                         # 更新步数，用于贪心策略的计算
                         agent.step = j * num_episodes / 10 + i_episode
-                        # 判断经验回放池中经验的数量是否超过了最小值（运用bn层的添加）
-                        if replay_buffer.size() > minimal_size:
-                            agent.actor.train()
-                            b_s, _, _, _, _ = replay_buffer.sample(batch_size)
-                            # 增加成二维的数组方便整合
-                            state_alone = np.array([state[i]])
-                            # 整合单独的状态和经验回放池中抽取的状态，用于应用
-                            state_input = np.vstack((state_alone, b_s[: -1]))
-                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
-                            # 更新状态批量
-                            state_bn = b_s[: -1]
-                        else:
-                            agent.actor.eval()
-                            state_input = state[i]
-                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
-                            # 增加一个维度
-                            state_input = torch.unsqueeze(state_input, dim=0)
+                        # 将网络设置为验证模式，这样可以在BN层使用训练中得到的weight和bias
+                        agent.actor.eval()
+                        state_input = state[i]
+                        state_input = torch.tensor(state_input, dtype=torch.float).to(device)
+                        # 增加一个维度
+                        state_input = torch.unsqueeze(state_input, dim=0)
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
                         # 得到下一个状态，奖励，是否完成，状态的类别（电量耗尽，坠机，到达目标点位等等）
@@ -258,9 +248,19 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 # 打印相关训练信息
                 print(
                     '\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'. \
-                    format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level, success_count,
-                           crash_count, bt_count, over_count))
-                # 保存模型参数
+                        format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level,
+                               success_count,
+                               crash_count, bt_count, over_count))
+                """学习率更新"""
+                # 是按照总体的迭代次数来更新的
+                if train_model == 'DDPG':
+                    agent.actor_scheduler.step()
+                    agent.critic_scheduler.step()
+                if train_model == 'SAC':
+                    agent.actor_scheduler.step()
+                    agent.critic_1_scheduler.step()
+                    agent.critic_2_scheduler.step()
+                """保存模型参数"""
                 if (i_episode + 1) % 10 == 0:
                     # 保存批量状态，用于验证
                     # 每100周期保存一次网络参数
