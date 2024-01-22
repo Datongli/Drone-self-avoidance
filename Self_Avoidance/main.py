@@ -21,9 +21,9 @@ if __name__ == '__main__':
     # 选择训练模型是DDPG还是SAC
     train_model = 'SAC'
     # 策略网络学习率
-    actor_lr = 1e-4
+    actor_lr = 1e-5
     # 价值网络学习率
-    critic_lr = 1e-4
+    critic_lr = 1e-5
     # SAC模型中的alpha参数学习率
     alpha_lr = 3e-4
     # 迭代次数
@@ -45,9 +45,9 @@ if __name__ == '__main__':
     # 三维环境下动作，加上一堆状态的感知，目前是15+26=41个
     state_dim = 41
     # 最大贪心次数，为0是直接根据Q值来选取的动作
-    max_eps_episode = 0
+    max_eps_episode = 10
     # 最小贪心概率
-    min_eps = 0
+    min_eps = 0.1
     # 正则化强度
     regularization_strength = 0.05
     wd = 0.02

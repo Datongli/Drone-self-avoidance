@@ -12,7 +12,7 @@ from SAC import *
 matplotlib.use('TkAgg')  # 或者其他后端
 
 # 选择模型
-test_model = 'DDPG'
+test_model = 'SAC'
 # 策略网络学习率
 actor_lr = 5e-4
 # 价值网络学习率
@@ -49,7 +49,7 @@ agent_r = 1
 # 动作区域
 action_area = np.array([[0, 0, 0], [100, 100, 25]])
 # 动作最大值
-action_bound = 0.5
+action_bound = 1
 # 目标熵，用于SAC算法
 target_entropy = - action_dim
 # SAC模型中的alpha参数学习率
@@ -59,12 +59,14 @@ max_eps_episode = 10
 # 最小贪心概率
 min_eps = 0.1
 regularization_strength = 1e-3
+wd = 0.2
+dropout = 0.0
 
 
 if __name__ == '__main__':
     if test_model == 'DDPG':
         agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
-                     action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, regularization_strength, device)
+                     action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, regularization_strength, wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
                     'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
@@ -77,14 +79,14 @@ if __name__ == '__main__':
         # agent.critic_optimizer.load_state_dict(torch.load(pth_load['critic'])['optimizer'])
     if test_model == 'SAC':
         agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
-                              alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, device)
+                              alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, wd, device)
         pth_load = {'SAC_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\SAC_actor.pth',
                     "critic_1": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
                     "critic_2": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
                     'target_critic_1': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_1.pth',
                     'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
     # 将算法切换至验证状态
-    # agent.train = False
+    agent.actor.eval()
     env = Environment(agent_r, action_area, num_uavs, v0)
     for name, pth in pth_load.items():
         # 按照键名称取出存档点
@@ -95,9 +97,10 @@ if __name__ == '__main__':
     env.level = 1  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
-    # 从 CSV 文件中加载数据
-    state_bn = np.loadtxt('state_bn.csv', delimiter=',')
-    state_input = np.vstack((state, state_bn))
+    agent.train = False  # 切换为验证模式
+    state_input = torch.tensor(state, dtype=torch.float).to(device)
+    # state_input = torch.unsqueeze(state_input, dim=0)
+    print("state_input:{}".format(state_input))
     total_reward = 0
     env.render(1)  # 绘制并渲染建筑物
 
