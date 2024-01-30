@@ -165,17 +165,21 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                             # 无人机已结束任务，跳过
                             continue
                         # 更新步数，用于贪心策略的计算
-                        agent.step = j * num_episodes / 10 + i_episode
+                        # agent.step = j * num_episodes / 10 + i_episode
+                        agent.step = env.uavs[i].step
                         # 将网络设置为验证模式，这样可以在BN层使用训练中得到的weight和bias
-                        agent.actor.eval()
+                        # agent.actor.eval()
                         state_input = state[i]
                         state_input = torch.tensor(state_input, dtype=torch.float).to(device)
                         # 增加一个维度
                         state_input = torch.unsqueeze(state_input, dim=0)
+                        # print("state_input:{}".format(state_input))
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
                         # 得到下一个状态，奖励，是否完成，状态的类别（电量耗尽，坠机，到达目标点位等等）
                         next_state, reward, uav_done, info = env.step(action, i)  # 根据选取的动作改变状态，获取收益
+                        # print("next_state:{}".format(next_state))
+                        # print("type of next_state:{}".format(type(next_state)))
                         env.uavs[i].info = info
                         # 将环境给出的奖励放到无人机对象的奖励记录中，用于检查每一步的好坏
                         env.uavs[i].reward.append(reward)
@@ -205,16 +209,26 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                             continue
                         # 状态变更
                         state[i] = next_state
-                        # 如果达到经验回放池的最低要求
-                    if replay_buffer.size() > minimal_size:
-                        b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(batch_size)
-                        transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r,
-                                           'dones': b_d}
-                        # 网络更新
-                        agent.update(transition_dict)
                     # 如果一个批次的无人机全都训练完毕
                     if n_done == env.num_uavs:
                         break
+                """每迭代一次，更新网络"""
+                # 如果达到经验回放池的最低要求，同时1次迭代跟新一次参数
+                if replay_buffer.size() > minimal_size and (i_episode + 1) % 1 == 0:
+                    b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(batch_size)
+                    transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r,
+                                       'dones': b_d}
+                    # 网络更新
+                    agent.update(transition_dict)
+                    """学习率更新"""
+                    # 是按照进入判断的次数来更新的
+                    if train_model == 'DDPG':
+                        agent.actor_scheduler.step()
+                        agent.critic_scheduler.step()
+                    if train_model == 'SAC':
+                        agent.actor_scheduler.step()
+                        agent.critic_1_scheduler.step()
+                        agent.critic_2_scheduler.step()
                 # 打印每一个无人机的奖励，看看
                 for uav in env.uavs:
                     # print("reward:{}".format(uav.reward))
@@ -246,20 +260,8 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         success_list = []
                 return_list.append(episode_return)
                 # 打印相关训练信息
-                print(
-                    '\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'. \
-                        format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level,
-                               success_count,
-                               crash_count, bt_count, over_count))
-                """学习率更新"""
-                # 是按照总体的迭代次数来更新的
-                if train_model == 'DDPG':
-                    agent.actor_scheduler.step()
-                    agent.critic_scheduler.step()
-                if train_model == 'SAC':
-                    agent.actor_scheduler.step()
-                    agent.critic_1_scheduler.step()
-                    agent.critic_2_scheduler.step()
+                print('\n 总迭代数量: {:5} 迭代次数: {:5} 得分: {:5}, 难度等级:{:5}  成功数量:{:2}  撞毁数量:{:2}  能量耗尽数量:{:2}  超过步长数量:{:2}'. \
+                        format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level, success_count, crash_count, bt_count, over_count))
                 """保存模型参数"""
                 if (i_episode + 1) % 10 == 0:
                     # 保存批量状态，用于验证

@@ -19,23 +19,23 @@ if __name__ == '__main__':
     # 是否不加载权重，重新开始训练
     retrain = True
     # 选择训练模型是DDPG还是SAC
-    train_model = 'SAC'
+    train_model = 'DDPG'
     # 策略网络学习率
-    actor_lr = 1e-5
+    actor_lr = 5e-5
     # 价值网络学习率
-    critic_lr = 1e-5
+    critic_lr = 5e-5
     # SAC模型中的alpha参数学习率
-    alpha_lr = 3e-4
+    alpha_lr = 1e-5
     # 迭代次数
-    num_episodes = 10000
+    num_episodes = 50000
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 128
+    hidden_dim = 256
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005
     tau = 0.05
     # 每一批次选取的经验数量
-    batch_size = 64
+    batch_size = 256
     # 经验回放池大小
     buffer_size = 100000
     # 经验回放池最小经验数目
@@ -43,11 +43,11 @@ if __name__ == '__main__':
     # 高斯噪声标准差
     sigma = 0.01
     # 三维环境下动作，加上一堆状态的感知，目前是15+26=41个
-    state_dim = 41
+    state_dim = 63
     # 最大贪心次数，为0是直接根据Q值来选取的动作
-    max_eps_episode = 10
+    max_eps_episode = 100
     # 最小贪心概率
-    min_eps = 0.1
+    min_eps = 0.2
     # 正则化强度
     regularization_strength = 0.05
     wd = 0.02

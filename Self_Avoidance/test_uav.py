@@ -12,33 +12,33 @@ from SAC import *
 matplotlib.use('TkAgg')  # 或者其他后端
 
 # 选择模型
-test_model = 'SAC'
+test_model = 'DDPG'
 # 策略网络学习率
-actor_lr = 5e-4
+actor_lr = 1e-4
 # 价值网络学习率
-critic_lr = 5e-3
+critic_lr = 1e-4
 # 迭代次数
-num_episodes = 10000
+num_episodes = 50000
 # 隐藏节点，先暂定64，后续可以看看效果
-hidden_dim = 128
+hidden_dim = 256
 # 折扣因子
-gamma = 0.98
+gamma = 0.99
 # 软更新参数
-tau = 0.005
+tau = 0.05
 # 经验回放池大小
 buffer_size = 10000
-# 经验回放池最小经验数目
-minimal_size = 100
 # 每一批次选取的经验数量
 batch_size = 64
+# 经验回放池最小经验数目
+minimal_size = batch_size
 # 高斯噪声标准差
 sigma = 0.01
 # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
-state_dim = 41
+state_dim = 63
 # 暂定直接控制智能体的位移，所以是三维的
 action_dim = 3
 # 每一次迭代中，无人机的数量
-num_uavs = 30
+num_uavs = 15
 # 无人机可控风速
 v0 = 40
 # 设备
@@ -49,18 +49,17 @@ agent_r = 1
 # 动作区域
 action_area = np.array([[0, 0, 0], [100, 100, 25]])
 # 动作最大值
-action_bound = 1
+action_bound = 1.0
 # 目标熵，用于SAC算法
 target_entropy = - action_dim
 # SAC模型中的alpha参数学习率
-alpha_lr = 3e-4
+alpha_lr = 1e-5
 # 最大贪心次数
-max_eps_episode = 10
+max_eps_episode = 0
 # 最小贪心概率
-min_eps = 0.1
-regularization_strength = 1e-3
-wd = 0.2
-dropout = 0.0
+min_eps = 0.0
+regularization_strength = 0.05
+wd = 0.02
 
 
 if __name__ == '__main__':
@@ -71,12 +70,6 @@ if __name__ == '__main__':
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
                     'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
                     'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
-        # agent.actor.load_state_dict(torch.load(pth_load['actor'])['model'])
-        # agent.critic.load_state_dict(torch.load(pth_load['critic'])['model'])
-        # agent.target_actor.load_state_dict(torch.load(pth_load['target_actor'])['model'])
-        # agent.target_critic.load_state_dict(torch.load(pth_load['target_critic'])['model'])
-        # agent.actor_optimizer.load_state_dict(torch.load(pth_load['actor'])['optimizer'])
-        # agent.critic_optimizer.load_state_dict(torch.load(pth_load['critic'])['optimizer'])
     if test_model == 'SAC':
         agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
                               alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, wd, device)
@@ -85,8 +78,6 @@ if __name__ == '__main__':
                     "critic_2": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
                     'target_critic_1': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_1.pth',
                     'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
-    # 将算法切换至验证状态
-    agent.actor.eval()
     env = Environment(agent_r, action_area, num_uavs, v0)
     for name, pth in pth_load.items():
         # 按照键名称取出存档点
@@ -97,10 +88,7 @@ if __name__ == '__main__':
     env.level = 1  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
-    agent.train = False  # 切换为验证模式
-    state_input = torch.tensor(state, dtype=torch.float).to(device)
-    # state_input = torch.unsqueeze(state_input, dim=0)
-    print("state_input:{}".format(state_input))
+    # agent.train = False  # 切换为验证模式
     total_reward = 0
     env.render(1)  # 绘制并渲染建筑物
 
@@ -114,7 +102,12 @@ if __name__ == '__main__':
             if env.uavs[0].done:
                 # 无人机已结束任务，跳过
                 break
-            action = agent.take_action(state_input)[0]
+            # 更新agent中的步数
+            agent.step = env.uavs[0].step
+            state = torch.tensor(state[0], dtype=torch.float).to(device)
+            # 增加一个维度
+            state = torch.unsqueeze(state, dim=0)
+            action = agent.take_action(state)[0]
             # 根据选取的动作改变状态，获取收益
             next_state, reward, uav_done, info = env.step(action, 0)
             # 求总收益
@@ -127,7 +120,7 @@ if __name__ == '__main__':
             plt.pause(0.01)
             if uav_done:
                 break
-            state[0] = next_state  # 状态变更
+            state = [next_state]  # 状态变更
 
         print(env.uavs[0].step)
         env.ax.scatter(env.target.x, env.target.y, env.target.z, c='red')

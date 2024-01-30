@@ -33,26 +33,40 @@ class PolicyNetContinuous(torch.nn.Module):
         self.fc2 = torch.nn.Linear(256, 512)
         # self.bn2 = nn.BatchNorm1d(512)
         # self.fc3 = weight_norm(torch.nn.Linear(512, 256))
-        self.fc3 = torch.nn.Linear(512, 256)
+        self.fc3 = torch.nn.Linear(512, 1024)
         # self.bn3 = nn.BatchNorm1d(256)
         # self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
-        self.fc4 = torch.nn.Linear(256, hidden_dim)
+        self.fc4 = torch.nn.Linear(1024, 512)
+        self.fc5 = torch.nn.Linear(512, 256)
+        self.fc6 = torch.nn.Linear(256, hidden_dim)
         # self.bn4 = nn.BatchNorm1d(hidden_dim)
         # self.fc_mu = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.fc_mu = torch.nn.Linear(hidden_dim, action_dim)
         # self.fc_std = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.fc_std = torch.nn.Linear(hidden_dim, action_dim)
         self.action_bound = action_bound
-        # self.prelu = nn.PReLU()
-        self.prelu = torch.tanh
+        self.prelu = nn.PReLU()
+        # self.prelu = torch.tanh
+        # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练
+        self.policy_mean = nn.Parameter(torch.zeros((state_dim,)), requires_grad=True)
+        self.policy_std = nn.Parameter(torch.ones((state_dim,)), requires_grad=True)
+        # 初始化参数
         self.init_weights()
 
     def init_weights(self):
         # 使用 Xavier/Glorot 初始化
-        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_mu, self.fc_std]:
+        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_mu, self.fc_std, self.fc5, self.fc6]:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
-                init.zeros_(layer.bias)
+                init.normal_(layer.bias, mean=0, std=0.4)
+
+    def input_norm(self, x):
+        """
+        用于归一化输入，使用的mean和std均是可以训练的参数
+        :param x:输入的数据
+        :return:归一化之后的输入
+        """
+        return (x - self.policy_mean) / self.policy_std
 
     def forward(self, x):
         """
@@ -64,6 +78,8 @@ class PolicyNetContinuous(torch.nn.Module):
         # x = nn.PReLU(self.fc1(x))
         # x = self.bn0(x)
         # print("输入的x:{}".format(x))
+        x = self.input_norm(x)
+        # print("通过归一化之后的x:{}".format(x))
         x = self.fc1(x)
         # print("通过第一层之后的:{}".format(x))
         # x = self.bn1(x)
@@ -79,9 +95,16 @@ class PolicyNetContinuous(torch.nn.Module):
         # x = self.bn4(x)
         x = self.prelu(x)
         # 通过第二个全连接层获得均值
+        # print("x:{}".format(x))
+        x = self.fc5(x)
+        x = self.prelu(x)
+        x = self.fc6(x)
+        x = self.prelu(x)
         mu = self.fc_mu(x)
         # 使用Softplus激活函数处理第三个全连接层的输出，得到标准差
         std = F.softplus(self.fc_std(x))
+        # print("mu:{}".format(mu))
+        # print("std:{}".format(std))
         # 创建正态分布对象，以均值和标准差作为参数
         dist = Normal(mu, std)
         # 从正态分布中进行重参数化采样，以获得动作
@@ -124,23 +147,36 @@ class QValueNetContinuous(torch.nn.Module):
         self.fc2 = torch.nn.Linear(256, 512)
         # self.bn2 = nn.BatchNorm1d(512)
         # self.fc3 = weight_norm(torch.nn.Linear(512, 256))
-        self.fc3 = torch.nn.Linear(512, 256)
+        self.fc3 = torch.nn.Linear(512, 1024)
         # self.bn3 = nn.BatchNorm1d(256)
         # self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
-        self.fc4 = torch.nn.Linear(256, hidden_dim)
+        self.fc4 = torch.nn.Linear(1024, 512)
         # self.bn4 = nn.BatchNorm1d(hidden_dim)
         # self.fc_out = weight_norm(torch.nn.Linear(hidden_dim, 1))
+        self.fc5 = torch.nn.Linear(512, 256)
+        self.fc6 = torch.nn.Linear(256, hidden_dim)
         self.fc_out = torch.nn.Linear(hidden_dim, 1)
-        # self.prelu = nn.PReLU()
-        self.prelu = torch.tanh
+        self.prelu = nn.PReLU()
+        # self.prelu = torch.tanh
+        # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练
+        self.value_mean = nn.Parameter(torch.zeros((state_dim + action_dim,)), requires_grad=True)
+        self.value_std = nn.Parameter(torch.ones((state_dim + action_dim,)), requires_grad=True)
         self.init_weights()
 
     def init_weights(self):
         # 使用 Xavier/Glorot 初始化
-        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_out]:
+        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_out, self.fc5, self.fc6]:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
-                init.zeros_(layer.bias)
+                init.normal_(layer.bias, mean=0, std=0.4)
+
+    def input_norm(self, x):
+        """
+        用于将输入归一化的类函数，所使用的mean和std均为可以训练的参数
+        :param x: 输入数据
+        :return: 输出的归一化之后的数据
+        """
+        return (x - self.value_mean) / self.value_std
 
     def forward(self, x, a):
         """
@@ -151,17 +187,21 @@ class QValueNetContinuous(torch.nn.Module):
         """
         x = torch.cat([x, a], dim=1)
         # x = self.bn0(x)
+        # print("输入的x为：{}".format(x))
+        x = self.input_norm(x)
         x = self.fc1(x)
-        # x = self.bn1(x)
+        # print("通过第一层全连接之后：{}".format(x))
         x = self.prelu(x)
+        # print("通过激活层：{}".format(x))
         x = self.fc2(x)
-        # x = self.bn2(x)
         x = self.prelu(x)
         x = self.fc3(x)
-        # x = self.bn3(x)
         x = self.prelu(x)
         x = self.fc4(x)
-        # x = self.bn4(x)
+        x = self.prelu(x)
+        x = self.fc5(x)
+        x = self.prelu(x)
+        x = self.fc6(x)
         x = self.prelu(x)
         return self.fc_out(x)
 
@@ -267,11 +307,16 @@ class SACContinuous:
                 # 根据Q值选择行为   Variable等效与torch.tensor
                 action = self.normal_take_action(state)
             else:
-                # 随机选取动作
-                action = []
-                for _ in range(3):
-                    # 随机选择动作
-                    action.append(random.random() * self.action_bound)
+                # 让无人机在目标的方向上前进距离为action_bound
+                uav_local = np.array(state[0][:3].cpu())
+                target_local = np.array(state[0][6:9].cpu())
+                # 计算两个点之间的向量
+                vector = target_local - uav_local
+                # 将向量标准化为单位向量
+                normalized_vector = vector / np.linalg.norm(vector)
+                # 将向量缩放为期望的距离
+                desired_distance = self.action_bound
+                action = normalized_vector * desired_distance
                 # 为了配合tool做的改变
                 action = np.array([action])
         return action
@@ -342,6 +387,10 @@ class SACContinuous:
         q1_value = self.critic_1(states, new_actions)
         q2_value = self.critic_2(states, new_actions)
         actor_loss = torch.mean(- self.log_alpha.exp() * entropy - torch.min(q1_value, q2_value))
+        # print("self.log_alpha.exp():{}".format(self.log_alpha.exp()))
+        # print("entropy:{}".format(entropy))
+        # print("q1_value:{}".format(q1_value))
+        # print("q2_value:{}".format(q2_value))
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -353,10 +402,10 @@ class SACContinuous:
         self.soft_update(self.critic_1, self.target_critic_1)
         self.soft_update(self.critic_2, self.target_critic_2)
         """检查一下各个loss的情况，看看是否梯度爆炸"""
-        print("critic_1_loss:{}".format(critic_1_loss))
-        print("critic_2_loss:{}".format(critic_2_loss))
-        print("actor_loss:{}".format(actor_loss))
-        print("alpha_loss:{}".format(alpha_loss))
+        # print("critic_1_loss:{}".format(critic_1_loss))
+        # print("critic_2_loss:{}".format(critic_2_loss))
+        # print("actor_loss:{}".format(actor_loss))
+        # print("alpha_loss:{}".format(alpha_loss))
 
 
 if __name__ == '__main__':
