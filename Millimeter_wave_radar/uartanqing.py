@@ -37,7 +37,7 @@ if __name__ == "__main__":
             print(list(comport)[0], list(comport)[1])
 
     # 打开串口通信，波特率为115200
-    ser = serial.Serial('COM6', 115200, timeout=1)
+    ser = serial.Serial('COM5', 115200, timeout=1)
     # 检查串口是否打开
     a = ser.isOpen()
     print(a)
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     ser.close()  # 关闭串口
     # 打开另一个串口
     # 指定串口设备路径、波特率、超时时间和字节间超时时间
-    ser1 = serial.Serial('COM5', 921600, timeout=0.002, inter_byte_timeout=0.0001)
+    ser1 = serial.Serial('COM6', 921600, timeout=0.002, inter_byte_timeout=0.0001)
     ser1.stopbits = 1  # 停止位数量为1，每个字节后有一个停止位
     ser1.bytesize = 8  # 每个字节大小设置为8位
     # c=ser1.isOpen()
@@ -116,7 +116,7 @@ if __name__ == "__main__":
                 print("point_num:{}".format(numpoint))
                 # numpoint = 1  # 设置点的数量为1
                 i = 1
-                while i <= numpoint:
+                while i <= 1:
                     # 现在的index都是120
                     index = 32 * (i - 1) + 120
                     print("点云{}：{}".format(i, array[120 + 32 * (i - 1): 120 + 32 * i]))
