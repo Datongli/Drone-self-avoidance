@@ -39,7 +39,13 @@ def cloud_kalman(data):
     noisy_positions = []
     # 进行卡尔曼滤波
     for i in range(num):
-        kf.predict()
+        if i > 0:
+            # 需要确认一下这里是秒级，时间戳计算出来是秒级，如果不是的话需要换算
+            dt = data['data'][i]['timestamp'] - data['data'][i - 1]['timestamp']
+            print(dt)
+            kf.F[0, 3] = dt
+            kf.F[1, 4] = dt
+            kf.F[2, 5] = dt
         kf.update(states[i])
         filtered_positions.append(kf.x[0:3])
         noisy_positions.append(states[i])
