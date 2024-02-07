@@ -9,17 +9,6 @@ import UAV
 import matplotlib.pyplot as plt
 
 
-def calculate_distance(point1, point2):
-    """
-    计算两个点之间的三维欧几里得距离
-    :param point1: 第一个点的坐标 (x1, y1, z1)
-    :param point2: 第二个点的坐标 (x2, y2, z2)
-    :return: 两点之间的距离
-    """
-    distance = np.sqrt(np.sum((np.array(point2) - np.array(point1)) ** 2))
-    return distance
-
-
 class Building:
     """
     建筑物的类
@@ -57,8 +46,6 @@ class Environment:
         self.agent_r = agent_r
         # 目标点位
         self.target = [0, 0, 0]
-        # 环境给的奖励值
-        self.reward = 0
         # 可以运动的空间(对角线形式)
         self.action_area = action_area
         # 课程学习的水平(训练难度等级)
@@ -87,8 +74,6 @@ class Environment:
         self.uavs = []
         # 清空建筑对象集合
         self.bds = []
-        # 奖励值清零
-        self.reward = 0
         """生成风场"""
         # 风场（风速，风向角）
         self.WindField = []

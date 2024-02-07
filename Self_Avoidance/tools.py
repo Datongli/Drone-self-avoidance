@@ -101,7 +101,7 @@ def epsilon_annealing(i_epsiode, max_episode, min_eps: float):
 
 
 def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
-                           max_eps_episode, min_eps, action_bound, train_model, device):
+                           train_model, device):
     """
     用于离线策略的训练函数
     :param env:可以交互的环境实例
@@ -112,9 +112,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     :param batch_size:训练批次的经验
     :param pth_load:pth文件的存放地址字典
     :param retrain: 是否重新开始训练
-    :param max_eps_episode: 最大贪心次数
-    :param min_eps:最小贪心概率
-    :param action_bound:动作限制值
     :param train_model:训练的模型是什么
     :param device: 设备
     :return:训练的结果
@@ -169,6 +166,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         agent.step = env.uavs[i].step
                         # 将网络设置为验证模式，这样可以在BN层使用训练中得到的weight和bias
                         # agent.actor.eval()
+                        # 得到输入的状态
                         state_input = state[i]
                         state_input = torch.tensor(state_input, dtype=torch.float).to(device)
                         # 增加一个维度
@@ -185,6 +183,9 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         env.uavs[i].reward.append(reward)
                         env.uavs[i].action.append(action)
                         episode_return += reward  # 求总收益
+                        # print("state:{}".format(state[i]))
+                        # print("action:{}".format(action))
+                        # print("next_state:{}".format(next_state))
                         # 将状态、动作、奖励、下一状态、是否结束 打包放入经验回放池
                         replay_buffer.add(state[i], action, reward, next_state, uav_done)
                         """判断状态的类别"""
@@ -265,7 +266,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 """保存模型参数"""
                 if (i_episode + 1) % 10 == 0:
                     # 保存批量状态，用于验证
-                    # 每100周期保存一次网络参数
+                    # 每10周期保存一次网络参数
                     if train_model == 'DDPG':
                         state = {'model': agent.actor.state_dict(), 'optimizer': agent.actor_optimizer.state_dict(),
                                  'epoch': epoch_all}

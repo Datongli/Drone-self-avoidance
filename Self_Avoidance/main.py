@@ -11,31 +11,29 @@ import tools
 from DDPG import DDPG
 from SAC import SACContinuous
 import environment
-# import matplotlib
-# matplotlib.use('TkAgg')  # 或者其他后端
 
 
 if __name__ == '__main__':
     # 是否不加载权重，重新开始训练
-    retrain = True
+    retrain = False
     # 选择训练模型是DDPG还是SAC
     train_model = 'DDPG'
     # 策略网络学习率
-    actor_lr = 5e-5
+    actor_lr = 1e-4
     # 价值网络学习率
-    critic_lr = 5e-5
+    critic_lr = 1e-4
     # SAC模型中的alpha参数学习率
     alpha_lr = 1e-5
     # 迭代次数
     num_episodes = 50000
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 256
+    hidden_dim = 64
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005
-    tau = 0.05
+    tau = 0.005
     # 每一批次选取的经验数量
-    batch_size = 256
+    batch_size = 128
     # 经验回放池大小
     buffer_size = 100000
     # 经验回放池最小经验数目
@@ -45,7 +43,8 @@ if __name__ == '__main__':
     # 三维环境下动作，加上一堆状态的感知，目前是15+26=41个
     state_dim = 63
     # 最大贪心次数，为0是直接根据Q值来选取的动作
-    max_eps_episode = 100
+    # 想要提升模型的性能，最好把训练的侧重点放在模型上
+    max_eps_episode = 10
     # 最小贪心概率
     min_eps = 0.2
     # 正则化强度
@@ -68,7 +67,7 @@ if __name__ == '__main__':
     # 动作区域
     action_area = np.array([[0, 0, 0], [100, 100, 25]])
     # 动作最大值
-    action_bound = 1.0
+    action_bound = 2.0
 
     # 实例化交互环境
     env = environment.Environment(agent_r, action_area, num_uavs, v0)
@@ -95,7 +94,7 @@ if __name__ == '__main__':
                     'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
     # 得到返回的奖励列表
     return_list = tools.train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
-                                               max_eps_episode, min_eps, action_bound, train_model, device)
+                                               train_model, device)
 
     # 绘图
     episodes_list = list(range(len(return_list)))
