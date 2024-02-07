@@ -9,6 +9,7 @@ import serial
 import numpy as np
 import collections
 from filterpy.kalman import KalmanFilter
+from datetime import datetime
 
 
 class ReplayBuffer:
@@ -18,8 +19,8 @@ class ReplayBuffer:
     def __init__(self, capacity):
         self.buffer = collections.deque(maxlen=capacity)
 
-    def add(self, state):
-        self.buffer.append((state))
+    def add(self, state, timestamp_m):
+        self.buffer.append((state, timestamp_m))
 
     def size(self):
         return len(self.buffer)
@@ -179,7 +180,11 @@ class SerialConnect(object):
                 # 坐标转换，存入状态回放池
                 target_longitude, target_latitude, target_altitude = self.coordinate_transformation(o_longitude, o_latitude, o_altitude, yaw,
                                                                                                     self.obstacle_x, self.obstacle_y, self.obstacle_z)
-                self.replayer.add(np.array([target_longitude, target_latitude, target_altitude]))
+                # 得到时间戳（秒级）
+                timestamp = datetime.timestamp(datetime.now())
+                # 将时间戳转换为毫秒级
+                timestamp_m = timestamp * 1000
+                self.replayer.add(np.array([target_longitude, target_latitude, target_altitude]), timestamp_m)
                 if self.obstacle_distance < 100:
                     self.need_coordinate = True
                 # 如果状态回放池里的长度满足算法所需要的长度
@@ -259,7 +264,7 @@ class SerialConnect(object):
         kf.Q *= 0.01  # 过程噪声，这里面可以使用dt来更改数值，要是效果不好可以考虑更改这一块
         kf.R *= 0.01  # 观测噪声
         # 取出初始状态
-        state_start = self.replayer.buffer[0]
+        state_start, timestamp_start = self.replayer.buffer[0]
         kf.x = np.concatenate((state_start, np.zeros(3)), axis=0)
         # 存储卡尔曼滤波后的状态
         filtered_positions = []
@@ -267,10 +272,15 @@ class SerialConnect(object):
         noisy_positions = []
         # 进行卡尔曼滤波
         for i in range(len(self.replayer.buffer)):
+            if i > 0:
+                dt = (self.replayer.buffer[i][1] - self.replayer.buffer[i - 1][1]) / 1000  # 计算时间差并转换为秒级，国际单位制
+                kf.F[0, 3] = dt
+                kf.F[1, 4] = dt
+                kf.F[2, 5] = dt
             kf.predict()
-            kf.update(self.replayer.buffer[i])  # 更新
+            kf.update(self.replayer.buffer[i][0])  # 更新
             filtered_positions.append(kf.x[0:3])
-            noisy_positions.append(self.replayer.buffer[i])
+            noisy_positions.append(self.replayer.buffer[i][0])
         # 预测一步
         for i in range(1):
             kf.predict()
