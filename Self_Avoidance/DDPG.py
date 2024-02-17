@@ -54,7 +54,7 @@ class LayerFC(torch.nn.Module):
         for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc5, self.fc6, self.fc7, self.fc8]:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
-                init.normal_(layer.bias, mean=0, std=0.4)
+                init.normal_(layer.bias, mean=0, std=1)
 
     def input_norm(self, x):
         """
@@ -127,10 +127,10 @@ class DDPG:
         :param device:设备
         """
         out_fn = (lambda x: x) if discrete else (lambda x: torch.tanh(x) * action_bound)
-        self.actor = LayerFC(num_in_actor, num_out_actor, hidden_dim, activation=F.relu, out_fn=out_fn).to(device)
-        self.target_actor = LayerFC(num_in_actor, num_out_actor, hidden_dim, activation=F.relu, out_fn=out_fn).to(device)
-        self.critic = LayerFC(num_in_critic, 1, hidden_dim, activation=F.relu).to(device)
-        self.target_critic = LayerFC(num_in_critic, 1, hidden_dim, activation=F.relu).to(device)
+        self.actor = LayerFC(num_in_actor, num_out_actor, hidden_dim, activation=nn.PReLU(), out_fn=out_fn).to(device)
+        self.target_actor = LayerFC(num_in_actor, num_out_actor, hidden_dim, activation=nn.PReLU(), out_fn=out_fn).to(device)
+        self.critic = LayerFC(num_in_critic, 1, hidden_dim, activation=nn.PReLU()).to(device)
+        self.target_critic = LayerFC(num_in_critic, 1, hidden_dim, activation=nn.PReLU()).to(device)
         # 初始化目标价值网络并设置和价值网络相同的参数
         self.target_critic.load_state_dict(self.critic.state_dict())
         # 初始化目标策略网络并设置和策略相同的参数
@@ -237,7 +237,6 @@ class DDPG:
         rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(self.device)
         next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
-        print("states[0]:{}".format(states[0]))
         print("states:{}".format(states))
         print("actions:{}".format(actions))
         # 计算并更新网络
@@ -275,9 +274,6 @@ class DDPG:
         self.soft_update(self.actor, self.target_actor)
         # 软更新价值网络
         self.soft_update(self.critic, self.target_critic)
-        """检查loss的情况"""
-
-
 
 
 if __name__ == '__main__':

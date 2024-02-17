@@ -15,7 +15,7 @@ import environment
 
 if __name__ == '__main__':
     # 是否不加载权重，重新开始训练
-    retrain = False
+    retrain = True
     # 选择训练模型是DDPG还是SAC
     train_model = 'DDPG'
     # 策略网络学习率
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     # 迭代次数
     num_episodes = 50000
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 64
+    hidden_dim = 16
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005

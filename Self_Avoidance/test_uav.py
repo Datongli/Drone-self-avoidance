@@ -20,7 +20,7 @@ critic_lr = 1e-4
 # 迭代次数
 num_episodes = 50000
 # 隐藏节点，先暂定64，后续可以看看效果
-hidden_dim = 64
+hidden_dim = 16
 # 折扣因子
 gamma = 0.99
 # 软更新参数
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         # 装载模型参数
         agent.net_dict[name].load_state_dict(check_point['model'])
     # 真实场景运行
-    env.level = 8  # 环境难度等级
+    env.level = 10  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
     # agent.train = False  # 切换为验证模式

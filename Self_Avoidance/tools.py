@@ -181,6 +181,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         env.uavs[i].info = info
                         # 将环境给出的奖励放到无人机对象的奖励记录中，用于检查每一步的好坏
                         env.uavs[i].reward.append(reward)
+                        env.uavs[i].total_reward += reward
                         env.uavs[i].action.append(action)
                         episode_return += reward  # 求总收益
                         # print("state:{}".format(state[i]))
@@ -239,6 +240,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     #     print("c_p_crash:{}".format(uav.c_p_crash))
                     #     print("action:{}".format(uav.action))
                     #     print("r_n_distance:{}".format(uav.r_n_distance))
+                    print("total_reward:{}".format(uav.total_reward))
                     # 不看撞毁的
                     if uav.info == 2:
                         continue

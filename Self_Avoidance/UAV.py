@@ -44,6 +44,8 @@ class UAV:
         # 124个点的解释：5层，每层25个点，去掉中间的一个（无人机占据）
         # 无人机从环境中得到的奖励
         self.reward = []
+        # 无人机总奖励
+        self.total_reward = 0
         # 一些想要被观测到的值
         self.info = 0
         self.r_climb = []
@@ -106,10 +108,10 @@ class UAV:
         #               self.env.target.x, self.env.target.y, self.env.target.z,
         #               self.d_origin, self.step, self.distance,
         #               self.p_crash, self.now_bt, self.cost]
-        state_grid = [self.x, self.y, self.z, dx, dy, dz,
-                      self.env.target.x, self.env.target.y, self.env.target.z,
-                      self.step / (4 * self.d_origin + 4 * self.env.action_area[1][2]),
-                      self.distance]
+        # state_grid = [self.x, self.y, self.z, dx, dy, dz,
+        #               self.env.target.x, self.env.target.y, self.env.target.z,
+        #               self.step / (4 * self.d_origin + 4 * self.env.action_area[1][2]),
+        #               self.distance]
         # state_grid = [self.x / self.env.action_area[1][0], self.y / self.env.action_area[1][1], self.z / self.env.action_area[1][2],
         #               dx / self.env.action_area[1][0], dy / self.env.action_area[1][1], dz / self.env.action_area[1][2],
         #               self.env.target.x / self.env.action_area[1][0], self.env.target.y / self.env.action_area[1][1], self.env.target.z / self.env.action_area[1][2],
@@ -117,11 +119,11 @@ class UAV:
         #               self.step / (4 * self.d_origin + 4 * self.env.action_area[1][2]),
         #               self.distance / math.sqrt(self.env.action_area[1][0] ** 2 + self.env.action_area[1][1] ** 2 + self.env.action_area[1][2] ** 2),
         #               self.p_crash / 1.0, self.now_bt / 16, self.cost / self.bt]
-        # state_grid = [self.x / self.env.action_area[1][0], self.y / self.env.action_area[1][1], self.z / self.env.action_area[1][2],
-        #               dx / self.env.action_area[1][0], dy / self.env.action_area[1][1], dz / self.env.action_area[1][2],
-        #               self.env.target.x / self.env.action_area[1][0], self.env.target.y / self.env.action_area[1][1], self.env.target.z / self.env.action_area[1][2],
-        #               self.step / (4 * self.d_origin + 4 * self.env.action_area[1][2]),
-        #               self.distance / self.d_origin]
+        state_grid = [self.x / self.env.action_area[1][0], self.y / self.env.action_area[1][1], self.z / self.env.action_area[1][2],
+                      dx / self.env.action_area[1][0], dy / self.env.action_area[1][1], dz / self.env.action_area[1][2],
+                      self.env.target.x / self.env.action_area[1][0], self.env.target.y / self.env.action_area[1][1], self.env.target.z / self.env.action_area[1][2],
+                      self.step / (4 * self.d_origin + 4 * self.env.action_area[1][2]),
+                      self.distance / self.d_origin]
         # 根据无人机周围的环境，更新无人机感受野中的情况
         for i in range(-1, 2):
             for j in range(-1, 2):
@@ -142,14 +144,14 @@ class UAV:
                     limit_distance = self.col_limit_distance(np.array([self.x + i, self.y + j, self.z + k]))
                     if limit_distance <= nearest_distance:
                         nearest_distance = limit_distance
-                    state_grid.append(5 - nearest_distance)
-                    # state_grid.append(nearest_distance / 5.0)
-                    detector_distance = math.sqrt((self.x + i - self.env.target.x) ** 2 +
-                                                  (self.y + j - self.env.target.y) ** 2 +
-                                                  (self.z + k - self.env.target.z) ** 2)
+                    # state_grid.append(5 - nearest_distance)
+                    state_grid.append((5 - nearest_distance) / 5.0)
                     # detector_distance = math.sqrt((self.x + i - self.env.target.x) ** 2 +
                     #                               (self.y + j - self.env.target.y) ** 2 +
-                    #                               (self.z + k - self.env.target.z) ** 2) / self.d_origin
+                    #                               (self.z + k - self.env.target.z) ** 2)
+                    detector_distance = math.sqrt((self.x + i - self.env.target.x) ** 2 +
+                                                  (self.y + j - self.env.target.y) ** 2 +
+                                                  (self.z + k - self.env.target.z) ** 2) / self.d_origin
                     state_grid.append(detector_distance)
         # 得到无人机的状态
         # 728+16=744
@@ -229,9 +231,12 @@ class UAV:
         # 最小距离奖励
         if self.nearest_distance >= 5:
             r_n_distance = 0
-        else:
+        elif self.nearest_distance >= 1:
             # 让这个奖励绝对值大于1
-            r_n_distance = -10 / (self.nearest_distance + 1e-2)
+            # r_n_distance = -10 / (self.nearest_distance + 1e-2)
+            r_n_distance = (1 - (self.nearest_distance / 5) ** 0.4) * 10
+        else:
+            r_n_distance = -10
         # 计算目标奖励，感觉有可能是目标奖励不明显，如果动作量接近的非常小的话
         # 感觉应该更改一下目标奖励的计算方式
         if self.distance > 1:
@@ -241,9 +246,8 @@ class UAV:
             r_target = 1 * self.d_origin
         """计算总奖励r"""
         # 爬升奖励+目标奖励+能耗奖励-坠毁系数*坠毁概率
-        # reword = 1e-2 * (r_climb + r_target + r_e - crash * self.p_crash + r_n_distance)
-        # 仿照参考文章，只使用距离变化量来调控reward
-        reword = (r_climb + Ddistance * 1e1) * 1e-1
+        reword = (r_climb + r_target + r_e - crash * self.p_crash + r_n_distance) * 1e-1
+        # reword = (r_climb + Ddistance * 1e1) * 1e-1
         # print("没有经过加减的reward:{}".format(reword))
         # reword = r_climb + r_target + r_e - crash * self.p_crash
         self.r_climb.append(r_climb)
@@ -262,27 +266,27 @@ class UAV:
             # 发生碰撞，产生巨大惩罚
             # 根据碰撞点距离目标的远近来设置奖励的大小
             if self.distance <= 10:
-                reword -= 5
+                reword -= 0
                 done = True
                 info = 2
             else:
-                reword -= 10
+                reword -= 0
                 done = True
                 info = 2
         if self.distance <= 3:
             # 到达目标点，给予大量奖励
-            reword += 20
+            reword += 200
             done = True
             info = 1
         # 注意平衡探索步长和碰撞的关系
         if self.step >= 4 * self.d_origin + 4 * self.env.action_area[1][2]:
             # 步数超过最差步长（2*初始距离+2*空间高度），给予惩罚
-            reword -= 2
+            reword -= 0
             done = True
             info = 5
         if self.cost > self.bt:
             # 电量耗尽，给予大量惩罚
-            reword -= 2
+            reword -= 0
             done = True
             info = 3
         """更新无人机的坐标值"""
