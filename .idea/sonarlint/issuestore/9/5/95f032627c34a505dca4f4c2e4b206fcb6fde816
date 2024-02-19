@@ -1,0 +1,9 @@
+
+npython:S1542"ORename function "ByteToHex" to match the regular expression ^[a-z_][a-z0-9_]*$.(¨»ÏÏ8ú±¨Ã1
+vpython:S1542""RRename function "HexToDecimal" to match the regular expression ^[a-z_][a-z0-9_]*$.(äİúûÿÿÿÿ8ú±¨Ã1
+opython:S1542."PRename function "HexToFloat" to match the regular expression ^[a-z_][a-z0-9_]*$.(üéí—8ú±¨Ã1
+>python:S125€"Remove this commented out code.(ó¦öû8ú±¨Ã1
+=python:S125‡"Remove this commented out code.(ÍÅ€G8ú±¨Ã1
+Cpython:S125‘"Remove this commented out code.(«µûËúÿÿÿÿ8ú±¨Ã1
+>python:S125—"Remove this commented out code.(Ø§è¸8ú±¨Ã1
+Cpython:S125º"Remove this commented out code.(–ó²Ìÿÿÿÿÿ8ú±¨Ã1

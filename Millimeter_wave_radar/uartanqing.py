@@ -1,19 +1,20 @@
 """
-这个文件是丁建新师兄发来的，处理毫米波雷达信息的文件，现在先试图看懂
-可以尝试更改一下
+现在来改进一下，尝试使用卡尔曼滤波来预测后一个状态的值
+这里是主要用在无人机自主截击阶段的
+用于云控平台调用的再另外写
 """
 
 import serial  # 导入串口通信模块
 import serial.tools.list_ports
 import numpy as np
-import tkinter  # 导入图形用户界面模块
-import os  # 导入操作系统相关的模块
-import tkinter.messagebox  # 导入用于弹出消息框的模块
-import tkinter.filedialog  # 导入用于选择文件对话框的模块
 import time  # 导入时间模块
 import struct  # 导入结构化数据处理模块
 import math  # 导入数学模块
 import json  # 导入JSON数据处理模块
+import collections
+from filterpy.kalman import KalmanFilter
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 
 def ByteToHex(bins):
@@ -25,8 +26,62 @@ def ByteToHex(bins):
     return ''.join(["%02X" % x for x in bins]).strip()
 
 
-if __name__ == "__main__":
+class ReplayBuffer:
+    """
+    状态回放池
+    """
+    def __init__(self, capacity):
+        self.buffer = collections.deque(maxlen=capacity)
 
+    def add(self, state, timestamp_millisecond):
+        """
+        将数据加入buffer中
+        :param state: 目标无人机的经纬高坐标
+        :param timestamp_millisecond: 目标无人机的时间戳（毫秒级）
+        :return: 更新容器
+        """
+        self.buffer.append((state, timestamp_millisecond))
+
+    def size(self):
+        """
+        读取目前缓冲区中数据的数量
+        :return: 缓冲区中数据数量
+        """
+        return len(self.buffer)
+
+
+if __name__ == "__main__":
+    # 经验回放池大小
+    buffer_size = 10
+    # 实例化经验回访池
+    replayer = ReplayBuffer(buffer_size)
+    # 构建卡尔曼滤波器
+    kf = KalmanFilter(dim_x=6, dim_z=3)
+    """
+    定义状态转移矩阵，下面这样定义意味着认为在两个点之间，是匀速在运动
+    """
+    kf.F = np.array([[1, 0, 0, 1, 0, 0],
+                     [0, 1, 0, 0, 1, 0],
+                     [0, 0, 1, 0, 0, 1],
+                     [0, 0, 0, 1, 0, 0],
+                     [0, 0, 0, 0, 1, 0],
+                     [0, 0, 0, 0, 0, 1]])
+    """
+    定义观测矩阵，下面这样定义意味着探测器可以观测到目标的三维坐标，但是观测不到速度
+    """
+    kf.H = np.array([[1, 0, 0, 0, 0, 0],
+                     [0, 1, 0, 0, 0, 0],
+                     [0, 0, 1, 0, 0, 0]])
+    """
+    定义过程噪声和观测噪声的协方差矩阵
+    """
+    kf.Q *= 0.01  # 过程噪声，这里面可以使用dt来更改数值，要是效果不好可以考虑更改这一块
+    kf.R *= 0.01  # 观测噪声
+    """
+    初始协方差矩阵，下面这样定义代表只和自己有关，速度和状态无关
+    """
+    kf.P *= 1
+    """雷达读取数据"""
     # 检查是否有可用的串口设备
     ports_list = list(serial.tools.list_ports.comports())
     if len(ports_list) <= 0:
@@ -41,9 +96,6 @@ if __name__ == "__main__":
     # 检查串口是否打开
     a = ser.isOpen()
     print(a)
-    # ser.write("hello".encode())
-    # path = tkinter.filedialog.askopenfilename()
-    # print(path)
     # 文件路径（暂时指定为'test.txt'，可以根据实际情况修改）
     # 根据现有知识，这里应该是配置雷达的文件
     path = r'D:\学习\研究生\安擎\毫米波雷达文件\test.txt'
@@ -63,33 +115,15 @@ if __name__ == "__main__":
     ser1 = serial.Serial('COM6', 921600, timeout=0.002, inter_byte_timeout=0.0001)
     ser1.stopbits = 1  # 停止位数量为1，每个字节后有一个停止位
     ser1.bytesize = 8  # 每个字节大小设置为8位
-    # c=ser1.isOpen()
-    # print(c)
     ser1.close()
     ser1.open()
     ser1.write("hello".encode())  # 向串口写入"hello"字符串
 
     while(1):
-        # data = ser1.readline(100)
-        # #data1=bytes.fromhex(data)
-        # #hexShow(data)
-        # print(data)
-        # print(type(data))
-        # ser1.flushInput()
-        # ser1.flush()
         ser1.flush()  # 清空缓冲区
         temp =ser1.read_all()  # 读取所有可用的数据
-
-        # flush()
-        # print(temp)
-        # time.sleep(2)
-        # print(temp[0])
         temp = ByteToHex(temp)  # 将字节数据转换为十六进制字符串
         array = list(temp)  # 接收数据存成list，将字符串转换为字符列表。没有检测到内容就是空的，检测到内容为非空
-        # print("array:{}".format(array))
-        # e = array[96:100]  # 截取列表的一部分
-
-        # int(ff, 16) #16进制转换为10进制
         range1_list = []  # range1：范围
         azimuth_list = []  # azimuth：方位角
         elevation_list = []  # elevation：高度（可能是海拔）
@@ -156,10 +190,61 @@ if __name__ == "__main__":
                     # 格式化输出x,y,z坐标
                     efflist = "%f %f %f" % (x, y, z)
                     print(efflist)
+                    # 得到时间戳（秒级）
+                    timestamp = datetime.timestamp(datetime.now())
+                    # 将时间戳转换为毫秒级
+                    timestamp_millisecond = timestamp * 1000
+                    replayer.add(np.array([x, y, z]), timestamp_millisecond)  # 将目标的各个参数添加到经验回放池中
 
                     i = i + 1
 
                 time.sleep(0.5)
+
+        # 如果经验回放池里面的数据超过了需要的最小值
+        if replayer.size() >= 10:
+            state_start, timestamp_start = replayer.buffer[0]  # 取出第一个状态
+            # 确定为初始状态
+            kf.x = np.concatenate((state_start, np.array([0, 0, 0])), axis=0)  # 将状态拼接成一个向量
+            # 进行卡尔曼滤波
+            filtered_positions = []
+            # 得到传感器中的数据
+            noisy_positions = []
+            for i in range(10):
+                if i > 0:
+                    dt = (replayer.buffer[i][1] - replayer.buffer[i - 1][1]) / 1000  # 计算时间差
+                    kf.F[0, 3] = dt
+                    kf.F[1, 4] = dt
+                    kf.F[2, 5] = dt
+                kf.predict()  # 预测
+                kf.update(replayer.buffer[i][0])  # 更新
+                filtered_positions.append(kf.x[0:3])  # 将预测的结果添加到filtered_positions列表中
+                noisy_positions.append(replayer.buffer[i][0])  # 将实测的结果添加到noisy_positions列表中
+            # 提取滤波后的位置坐标
+            filtered_positions = np.array(filtered_positions)
+            noisy_positions = np.array(noisy_positions)
+
+            # 绘制结果
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.plot(filtered_positions[:, 0], filtered_positions[:, 1], filtered_positions[:, 2], label='Filtered Positions', marker='.')
+            print(noisy_positions)
+            ax.plot(noisy_positions[:, 0], noisy_positions[:, 1], noisy_positions[:, 2], label='Noisy Positions', marker='x')
+            ax.legend()
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Z')
+            ax.set_title('Kalman Filter for 3D Trajectory Prediction')
+            plt.show()
+
+            """是否继续"""
+            pd = input("是否继续(y/n)")
+            if pd == 'n':
+                break
+            else:
+                continue
+
+
+
 
   
           

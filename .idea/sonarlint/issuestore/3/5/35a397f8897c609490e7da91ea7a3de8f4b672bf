@@ -1,0 +1,8 @@
+
+apython:S6711;"DUse a "numpy.random.Generator" here instead of this legacy function.(­÷õ±ÿÿÿÿÿ
+apython:S6711@"DUse a "numpy.random.Generator" here instead of this legacy function.(´ªÉşÿÿÿÿ
+apython:S6711T"DUse a "numpy.random.Generator" here instead of this legacy function.(÷‰À‹üÿÿÿÿ
+Jpython:S1172e"-Remove the unused function parameter "x_dot".(Ó¸áÂÿÿÿÿÿ
+Npython:S1172e"1Remove the unused function parameter "theta_dot".(Ó¸áÂÿÿÿÿÿ
+Jpython:S1481q"-Replace unused local variable "fig" with "_".(áç‹ãşÿÿÿÿ
+Kpython:S1481x".Replace unused local variable "info" with "_".(å§Õæÿÿÿÿÿ

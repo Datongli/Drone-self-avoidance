@@ -1,0 +1,7 @@
+
+_python:S2208"GImport only needed names or import the module and then use its members.(éµù’
+=python:S125$"Remove this commented out code.(¬é¤8Ú¬ÛÈÅ1
+qpython:S3776M"TRefactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.(ÌøÆŠÿÿÿÿÿ
+7python:S125‰"Remove this commented out code.(Ÿ¤öï
+{python:S117£"cRename this local variable "check_point_Qlocal" to match the regular expression ^[_a-z][a-z0-9_]*$.(åÄÙó
+python:S117¤"dRename this local variable "check_point_Qtarget" to match the regular expression ^[_a-z][a-z0-9_]*$.(Æà§şÿÿÿÿ

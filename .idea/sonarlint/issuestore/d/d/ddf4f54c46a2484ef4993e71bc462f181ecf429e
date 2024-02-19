@@ -1,0 +1,10 @@
+
+jpython:S1192Ø"KDefine a constant instead of duplicating this literal 'TRPO on {}' 4 times.(şé8•ïßõÃ1
+=python:S125y"Remove this commented out code.(®Ã¯Ò8•ïßõÃ1
+rpython:S117›"SRename this local variable "Hp" to match the regular expression ^[_a-z][a-z0-9_]*$.(ªùÒè8•ïßõÃ1
+Epython:S1481™"%Remove the unused local variable "i".(éŠ‰£8•ïßõÃ1
+qpython:S117ö"SRename this local variable "Hd" to match the regular expression ^[_a-z][a-z0-9_]*$.(ì¸ïC8•ïßõÃ1
+rpython:S117÷"SRename this local variable "Hp" to match the regular expression ^[_a-z][a-z0-9_]*$.(ªùÒè8•ïßõÃ1
+Epython:S1481ö"%Remove the unused local variable "i".(éŠ‰£8•ïßõÃ1
+Rpython:S1172ƒ"-Remove the unused function parameter "actor".(— õ•ÿÿÿÿÿ8•ïßõÃ1
+qpython:S117Ÿ"SRename this local variable "Hd" to match the regular expression ^[_a-z][a-z0-9_]*$.(ì¸ïC8•ïßõÃ1

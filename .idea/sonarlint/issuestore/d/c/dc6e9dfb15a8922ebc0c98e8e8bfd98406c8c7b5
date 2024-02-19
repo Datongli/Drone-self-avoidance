@@ -1,0 +1,12 @@
+
+_python:S2208"GImport only needed names or import the module and then use its members.(øøò–
+mpython:S116H"QRename this field "WindField" to match the regular expression ^[_a-z][_a-z0-9]*$.(´›üÿÿÿÿ
+wpython:S117;"YRename this parameter "LEARNING_RATE" to match the regular expression ^[_a-z][a-z0-9_]*$.(ª°šõ8Ö®ÓÜÅ1
+mpython:S117s"VRename this parameter "BATCH_SIZE" to match the regular expression ^[_a-z][a-z0-9_]*$.(­“Ãé
+xpython:S117‹"[Rename this local variable "Q_expected" to match the regular expression ^[_a-z][a-z0-9_]*$.(ğ—“âşÿÿÿÿ
+wpython:S117‘"ZRename this local variable "Q_targets" to match the regular expression ^[_a-z][a-z0-9_]*$.(ğ¦Â¸ıÿÿÿÿ
+|python:S117"_Rename this local variable "Q_targets_next" to match the regular expression ^[_a-z][a-z0-9_]*$.(Úı²ÿÿÿÿÿ
+6python:S125­"Remove this commented out code.(ƒ§^
+bpython:S6711æ"DUse a "numpy.random.Generator" here instead of this legacy function.(¨œúÜøÿÿÿÿ
+bpython:S6711"DUse a "numpy.random.Generator" here instead of this legacy function.(è¢¼ùÿÿÿÿ
+7python:S125µ"Remove this commented out code.(åß‚

@@ -1,0 +1,5 @@
+
+opython:S116E"QRename this field "WindField" to match the regular expression ^[_a-z][_a-z0-9]*$.(î×â±8‡ÍÈ1
+spython:S3776P"TRefactor this function to reduce its Cognitive Complexity from 41 to the 15 allowed.(ÛÁ·„8ˆÍÈ1
+hpython:S6711b"DUse a "numpy.random.Generator" here instead of this legacy function.(¨œúÜøÿÿÿÿ8ˆÍÈ1
+Hpython:S108å")Either remove or fill this block of code.(ã‘Û¾8ˆÍÈ1

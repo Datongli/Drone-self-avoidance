@@ -1,0 +1,9 @@
+
+spython:S3776F"TRefactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.(êëÓ÷8öÂèÆ1
+=python:S125g"Remove this commented out code.(ãßŸı8öÂèÆ1
+}python:S117|"ZRename this local variable "Ddistance" to match the regular expression ^[_a-z][a-z0-9_]*$.(ùÄûÿÿÿÿ8öÂèÆ1
+Mpython:S1481¥"(Remove the unused local variable "r_ob".(Ï¢ÔÍıÿÿÿÿ8öÂèÆ1
+Dpython:S1481w"&Remove the unused local variable "wt".(•Ëş8öÂèÆ1
+xpython:S3776j"TRefactor this function to reduce its Cognitive Complexity from 34 to the 15 allowed.(ÛÈÏüÿÿÿÿ8÷ÂèÆ1
+>python:S125¦"Remove this commented out code.(­‘¸Â8÷ÂèÆ1
+Cpython:S125Æ"Remove this commented out code.(çÙ‘Èşÿÿÿÿ8÷ÂèÆ1

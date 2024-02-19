@@ -1,0 +1,44 @@
+
+}python:S117"ZRename this local variable "tlvLength" to match the regular expression ^[_a-z][a-z0-9_]*$.(Ê¦„ÿÿÿÿÿ8®Ú€¤Á1
+{python:S117"XRename this local variable "tlvType" to match the regular expression ^[_a-z][a-z0-9_]*$.(Ê¦„ÿÿÿÿÿ8®Ú€¤Á1
+ypython:S1542"URename function "tlvHeaderDecode" to match the regular expression ^[a-z_][a-z0-9_]*$.(­ßÂšùÿÿÿÿ8®Ú€¤Á1
+Xpython:S1135"4Complete the task associated to this "TODO" comment.(ë‡Ä÷ıÿÿÿÿ8®Ú€¤Á1
+Spython:S1135"4Complete the task associated to this "TODO" comment.(§Õ„ñ8®Ú€¤Á1
+Xpython:S1135"4Complete the task associated to this "TODO" comment.(ÖÌÚ•úÿÿÿÿ8®Ú€¤Á1
+Ppython:S1172"1Remove the unused function parameter "tlvLength".(£üâ8®Ú€¤Á1
+~python:S117"[Rename this local variable "dopplerIdx" to match the regular expression ^[_a-z][a-z0-9_]*$.(ª©³Üúÿÿÿÿ8®Ú€¤Á1
+}python:S117"_Rename this local variable "numDetectedObj" to match the regular expression ^[_a-z][a-z0-9_]*$.(Ñ‚ó8®Ú€¤Á1
+{python:S117"XRename this local variable "peakVal" to match the regular expression ^[_a-z][a-z0-9_]*$.(ª©³Üúÿÿÿÿ8±Ú€¤Á1
+|python:S117"YRename this local variable "rangeIdx" to match the regular expression ^[_a-z][a-z0-9_]*$.(ª©³Üúÿÿÿÿ8±Ú€¤Á1
+spython:S117"URename this parameter "tlvLength" to match the regular expression ^[_a-z][a-z0-9_]*$.(£üâ8±Ú€¤Á1
+ypython:S117"[Rename this local variable "xyzQFormat" to match the regular expression ^[_a-z][a-z0-9_]*$.(Ñ‚ó8±Ú€¤Á1
+ypython:S1542"ZRename function "parseDetectedObjects" to match the regular expression ^[a-z_][a-z0-9_]*$.(£üâ8±Ú€¤Á1
+Upython:S1172&"1Remove the unused function parameter "tlvLength".(åÚªìùÿÿÿÿ8±Ú€¤Á1
+zpython:S117("]Rename this local variable "rangeProfile" to match the regular expression ^[_a-z][a-z0-9_]*$.(Š¶ãV8±Ú€¤Á1
+xpython:S117&"URename this parameter "tlvLength" to match the regular expression ^[_a-z][a-z0-9_]*$.(åÚªìùÿÿÿÿ8±Ú€¤Á1
+{python:S1542&"WRename function "parseRangeProfile" to match the regular expression ^[a-z_][a-z0-9_]*$.(åÚªìùÿÿÿÿ8±Ú€¤Á1
+Ppython:S1172-"1Remove the unused function parameter "tlvLength".(£µ˜Á8±Ú€¤Á1
+|python:S117."^Rename this local variable "activeCPULoad" to match the regular expression ^[_a-z][a-z0-9_]*$.(’¤²£8±Ú€¤Á1
+zpython:S117."\Rename this local variable "chirpMargin" to match the regular expression ^[_a-z][a-z0-9_]*$.(’¤²£8±Ú€¤Á1
+zpython:S117."\Rename this local variable "frameMargin" to match the regular expression ^[_a-z][a-z0-9_]*$.(’¤²£8±Ú€¤Á1
+{python:S117."]Rename this local variable "interCPULoad" to match the regular expression ^[_a-z][a-z0-9_]*$.(’¤²£8±Ú€¤Á1
+{python:S117."]Rename this local variable "interProcess" to match the regular expression ^[_a-z][a-z0-9_]*$.(’¤²£8±Ú€¤Á1
+spython:S117-"URename this parameter "tlvLength" to match the regular expression ^[_a-z][a-z0-9_]*$.(£µ˜Á8±Ú€¤Á1
+zpython:S117."\Rename this local variable "transmitOut" to match the regular expression ^[_a-z][a-z0-9_]*$.(’¤²£8±Ú€¤Á1
+opython:S1542-"PRename function "parseStats" to match the regular expression ^[a-z_][a-z0-9_]*$.(£µ˜Á8±Ú€¤Á1
+}python:S117L"ZRename this local variable "cpuCycles" to match the regular expression ^[_a-z][a-z0-9_]*$.(÷ãòøÿÿÿÿ8±Ú€¤Á1
+|python:S117L"YRename this local variable "frameNum" to match the regular expression ^[_a-z][a-z0-9_]*$.(÷ãòøÿÿÿÿ8±Ú€¤Á1
+€python:S117J"]Rename this local variable "headerLength" to match the regular expression ^[_a-z][a-z0-9_]*$.(´èŠ‹øÿÿÿÿ8±Ú€¤Á1
+zpython:S117L"WRename this local variable "numObj" to match the regular expression ^[_a-z][a-z0-9_]*$.(÷ãòøÿÿÿÿ8±Ú€¤Á1
+{python:S117L"XRename this local variable "numTLVs" to match the regular expression ^[_a-z][a-z0-9_]*$.(÷ãòøÿÿÿÿ8±Ú€¤Á1
+€python:S117Z"]Rename this local variable "pendingBytes" to match the regular expression ^[_a-z][a-z0-9_]*$.(ÍÍœ‘ùÿÿÿÿ8±Ú€¤Á1
+zpython:S117W"\Rename this local variable "subFrameNum" to match the regular expression ^[_a-z][a-z0-9_]*$.(ãàÄˆ8±Ú€¤Á1
+xpython:S117]"ZRename this local variable "tlvLength" to match the regular expression ^[_a-z][a-z0-9_]*$.(‹ó õ8±Ú€¤Á1
+vpython:S117]"XRename this local variable "tlvType" to match the regular expression ^[_a-z][a-z0-9_]*$.(‹ó õ8±Ú€¤Á1
+spython:S15428"ORename function "tlvHeader" to match the regular expression ^[a-z_][a-z0-9_]*$.(ßÆÄùûÿÿÿÿ8±Ú€¤Á1
+Spython:S1481L"/Replace unused local variable "magic" with "_".(÷ãòøÿÿÿÿ8±Ú€¤Á1
+Dpython:S1481\"%Remove the unused local variable "i".(Æù¨û8±Ú€¤Á1
+Wpython:S1481L"3Replace unused local variable "cpuCycles" with "_".(÷ãòøÿÿÿÿ8±Ú€¤Á1
+Bpython:S125:"Remove this commented out code.(ìµ¾½üÿÿÿÿ8±Ú€¤Á1
+[python:S5754N"<Specify an exception class to catch or reraise the exception(ˆÊÉ·8±Ú€¤Á1
+Bpython:S125n"Remove this commented out code.( Ú£¼ıÿÿÿÿ8±Ú€¤Á1
