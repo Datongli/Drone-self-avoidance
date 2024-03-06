@@ -16,37 +16,38 @@ class PolicyNetContinuous(torch.nn.Module):
     策略网络输出一个高斯分布的均值和标准差来表示动作分布
     """
 
-    def __init__(self, state_dim, hidden_dim, action_dim, action_bound):
+    def __init__(self, state_dim, hidden_dim, action_dim, action_bound, activation=F.relu):
         """
         初始化策略网络
         :param state_dim: 状态的纬度
         :param hidden_dim: 隐藏层数量
         :param action_dim: 动作的纬度
         :param action_bound: 动作的最大值
+        :parameter activation: 激活函数
         """
         super(PolicyNetContinuous, self).__init__()
         # self.bn0 = nn.BatchNorm1d(state_dim)
         # self.fc1 = weight_norm(torch.nn.Linear(state_dim, 256))
-        self.fc1 = torch.nn.Linear(state_dim, 256)
+        self.fc1 = torch.nn.Linear(state_dim, hidden_dim)
         # self.bn1 = nn.BatchNorm1d(256)
         # self.fc2 = weight_norm(torch.nn.Linear(256, 512))
-        self.fc2 = torch.nn.Linear(256, 512)
+        self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn2 = nn.BatchNorm1d(512)
         # self.fc3 = weight_norm(torch.nn.Linear(512, 256))
-        self.fc3 = torch.nn.Linear(512, 1024)
+        self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn3 = nn.BatchNorm1d(256)
         # self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
-        self.fc4 = torch.nn.Linear(1024, 512)
-        self.fc5 = torch.nn.Linear(512, 256)
-        self.fc6 = torch.nn.Linear(256, hidden_dim)
+        self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.fc5 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.fc6 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn4 = nn.BatchNorm1d(hidden_dim)
         # self.fc_mu = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.fc_mu = torch.nn.Linear(hidden_dim, action_dim)
         # self.fc_std = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.fc_std = torch.nn.Linear(hidden_dim, action_dim)
-        self.action_bound = action_bound
-        self.prelu = nn.PReLU()
-        # self.prelu = torch.tanh
+        self.activation_bound = action_bound
+        self.activation = activation
+        # self.activation = torch.tanh
         # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练
         self.policy_mean = nn.Parameter(torch.zeros((state_dim,)), requires_grad=True)
         self.policy_std = nn.Parameter(torch.ones((state_dim,)), requires_grad=True)
@@ -58,7 +59,7 @@ class PolicyNetContinuous(torch.nn.Module):
         for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_mu, self.fc_std, self.fc5, self.fc6]:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
-                init.normal_(layer.bias, mean=0, std=0.4)
+                init.normal_(layer.bias, mean=0, std=1)
 
     def input_norm(self, x):
         """
@@ -78,28 +79,28 @@ class PolicyNetContinuous(torch.nn.Module):
         # x = nn.PReLU(self.fc1(x))
         # x = self.bn0(x)
         # print("输入的x:{}".format(x))
-        x = self.input_norm(x)
+        # x = self.input_norm(x)
         # print("通过归一化之后的x:{}".format(x))
         x = self.fc1(x)
         # print("通过第一层之后的:{}".format(x))
         # x = self.bn1(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         # print("通过激活函数之后的:{}".format(x))
         x = self.fc2(x)
         # x = self.bn2(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc3(x)
         # x = self.bn3(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc4(x)
         # x = self.bn4(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         # 通过第二个全连接层获得均值
         # print("x:{}".format(x))
         x = self.fc5(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc6(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         mu = self.fc_mu(x)
         # 使用Softplus激活函数处理第三个全连接层的输出，得到标准差
         std = F.softplus(self.fc_std(x))
@@ -120,7 +121,7 @@ class PolicyNetContinuous(torch.nn.Module):
         # 计算tanh_normal分布的对数概率密度
         log_prob = log_prob - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)
         # 将动作缩放到合适的范围
-        action = action * self.action_bound
+        action = action * self.activation_bound
         # 返回动作和对数概率（熵） 这里将三个维度上的动作的熵进行了加和
         return action, torch.sum(log_prob, dim=1).view(-1, 1)
 
@@ -131,33 +132,34 @@ class QValueNetContinuous(torch.nn.Module):
     价值网络的输入是状态和动作的拼接向量，输出一个实数来表示动作价值
     """
 
-    def __init__(self, state_dim, hidden_dim, action_dim):
+    def __init__(self, state_dim, hidden_dim, action_dim, activation=F.relu):
         """
         初始化动作价值函数
         :param state_dim: 状态纬度
         :param hidden_dim: 隐藏纬度
         :param action_dim: 动作纬度
+        :param activation: 激活函数
         """
         super(QValueNetContinuous, self).__init__()
         # self.bn0 = nn.BatchNorm1d(state_dim + action_dim)
         # self.fc1 = weight_norm(torch.nn.Linear(state_dim + action_dim, 256))
-        self.fc1 = torch.nn.Linear(state_dim + action_dim, 256)
+        self.fc1 = torch.nn.Linear(state_dim + action_dim, hidden_dim)
         # self.bn1 = nn.BatchNorm1d(256)
         # self.fc2 = weight_norm(torch.nn.Linear(256, 512))
-        self.fc2 = torch.nn.Linear(256, 512)
+        self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn2 = nn.BatchNorm1d(512)
         # self.fc3 = weight_norm(torch.nn.Linear(512, 256))
-        self.fc3 = torch.nn.Linear(512, 1024)
+        self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn3 = nn.BatchNorm1d(256)
         # self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
-        self.fc4 = torch.nn.Linear(1024, 512)
+        self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn4 = nn.BatchNorm1d(hidden_dim)
         # self.fc_out = weight_norm(torch.nn.Linear(hidden_dim, 1))
-        self.fc5 = torch.nn.Linear(512, 256)
-        self.fc6 = torch.nn.Linear(256, hidden_dim)
+        self.fc5 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.fc6 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.fc_out = torch.nn.Linear(hidden_dim, 1)
-        self.prelu = nn.PReLU()
-        # self.prelu = torch.tanh
+        self.activation = activation
+        # self.activation = torch.tanh
         # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练
         self.value_mean = nn.Parameter(torch.zeros((state_dim + action_dim,)), requires_grad=True)
         self.value_std = nn.Parameter(torch.ones((state_dim + action_dim,)), requires_grad=True)
@@ -168,7 +170,7 @@ class QValueNetContinuous(torch.nn.Module):
         for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc_out, self.fc5, self.fc6]:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
-                init.normal_(layer.bias, mean=0, std=0.4)
+                init.normal_(layer.bias, mean=0, std=1)
 
     def input_norm(self, x):
         """
@@ -191,18 +193,18 @@ class QValueNetContinuous(torch.nn.Module):
         x = self.input_norm(x)
         x = self.fc1(x)
         # print("通过第一层全连接之后：{}".format(x))
-        x = self.prelu(x)
+        x = self.activation(x)
         # print("通过激活层：{}".format(x))
         x = self.fc2(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc3(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc4(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc5(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         x = self.fc6(x)
-        x = self.prelu(x)
+        x = self.activation(x)
         return self.fc_out(x)
 
 
@@ -229,15 +231,15 @@ class SACContinuous:
         :param device:设备
         """
         # 策略网络
-        self.actor = PolicyNetContinuous(state_dim, hidden_dim, action_dim, action_bound).to(device)
+        self.actor = PolicyNetContinuous(state_dim, hidden_dim, action_dim, action_bound, activation=nn.PReLU()).to(device)
         # 第一个Q网络
-        self.critic_1 = QValueNetContinuous(state_dim, hidden_dim, action_dim).to(device)
+        self.critic_1 = QValueNetContinuous(state_dim, hidden_dim, action_dim, activation=nn.PReLU()).to(device)
         # 第二个Q网络
-        self.critic_2 = QValueNetContinuous(state_dim, hidden_dim, action_dim).to(device)
+        self.critic_2 = QValueNetContinuous(state_dim, hidden_dim, action_dim, activation=nn.PReLU()).to(device)
         # 第一个目标Q网络
-        self.target_critic_1 = QValueNetContinuous(state_dim, hidden_dim, action_dim).to(device)
+        self.target_critic_1 = QValueNetContinuous(state_dim, hidden_dim, action_dim, activation=nn.PReLU()).to(device)
         # 第二个目标Q网络
-        self.target_critic_2 = QValueNetContinuous(state_dim, hidden_dim, action_dim).to(device)
+        self.target_critic_2 = QValueNetContinuous(state_dim, hidden_dim, action_dim, activation=nn.PReLU()).to(device)
         # 令目标Q网络的初始参数和Q网络一样
         self.target_critic_1.load_state_dict(self.critic_1.state_dict())
         self.target_critic_2.load_state_dict(self.critic_2.state_dict())
@@ -245,9 +247,9 @@ class SACContinuous:
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr, weight_decay=wd)
         self.critic_1_optimizer = torch.optim.Adam(self.critic_1.parameters(), lr=critic_lr, weight_decay=wd)
         self.critic_2_optimizer = torch.optim.Adam(self.critic_2.parameters(), lr=critic_lr, weight_decay=wd)
-        self.actor_scheduler = torch.optim.lr_scheduler.StepLR(self.actor_optimizer, step_size=200, gamma=0.5)
-        self.critic_1_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_1_optimizer, step_size=200, gamma=0.5)
-        self.critic_2_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_2_optimizer, step_size=200, gamma=0.5)
+        self.actor_scheduler = torch.optim.lr_scheduler.StepLR(self.actor_optimizer, step_size=500, gamma=0.5)
+        self.critic_1_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_1_optimizer, step_size=500, gamma=0.5)
+        self.critic_2_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_2_optimizer, step_size=500, gamma=0.5)
         # 使用alpha的log值，可以使训练结果比较稳定， 这里默认alpha为0.01（初始值）
         self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
         # 可以对alpha求梯度
@@ -261,7 +263,7 @@ class SACContinuous:
         self.min_eps = min_eps
         self.device = device
         self.step = 0
-        self.action_bound = action_bound
+        self.activation_bound = action_bound
         self.train = True
         # 可以被初始化的网络的字典，用于承接预训练的模型参数
         self.net_dict = {'SAC_actor': self.actor,
@@ -315,7 +317,7 @@ class SACContinuous:
                 # 将向量标准化为单位向量
                 normalized_vector = vector / np.linalg.norm(vector)
                 # 将向量缩放为期望的距离
-                desired_distance = self.action_bound
+                desired_distance = self.activation_bound
                 action = normalized_vector * desired_distance
                 # 为了配合tool做的改变
                 action = np.array([action])
@@ -364,13 +366,6 @@ class SACContinuous:
         rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(self.device)
         next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
-        # rewards = (rewards + 8.0) / 8.0
-        # 转化网络的模式
-        self.actor.train()
-        self.critic_1.train()
-        self.critic_2.train()
-        self.target_critic_1.train()
-        self.target_critic_2.train()
         # 更新两个Q网络
         td_target = self.calc_target(rewards, next_states, dones)
         critic_1_loss = torch.mean(F.mse_loss(self.critic_1(states, actions), td_target.detach()))
@@ -381,16 +376,17 @@ class SACContinuous:
         self.critic_2_optimizer.zero_grad()
         critic_2_loss.backward()
         self.critic_2_optimizer.step()
+        print("td_target:{}".format(td_target))
         # 更新策略网络
         new_actions, log_prob = self.actor(states)
         entropy = - log_prob
         q1_value = self.critic_1(states, new_actions)
         q2_value = self.critic_2(states, new_actions)
         actor_loss = torch.mean(- self.log_alpha.exp() * entropy - torch.min(q1_value, q2_value))
-        # print("self.log_alpha.exp():{}".format(self.log_alpha.exp()))
-        # print("entropy:{}".format(entropy))
-        # print("q1_value:{}".format(q1_value))
-        # print("q2_value:{}".format(q2_value))
+        print("self.log_alpha.exp():{}".format(self.log_alpha.exp()))
+        print("entropy:{}".format(entropy))
+        print("q1_value:{}".format(q1_value))
+        print("q2_value:{}".format(q2_value))
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -402,10 +398,10 @@ class SACContinuous:
         self.soft_update(self.critic_1, self.target_critic_1)
         self.soft_update(self.critic_2, self.target_critic_2)
         """检查一下各个loss的情况，看看是否梯度爆炸"""
-        # print("critic_1_loss:{}".format(critic_1_loss))
-        # print("critic_2_loss:{}".format(critic_2_loss))
-        # print("actor_loss:{}".format(actor_loss))
-        # print("alpha_loss:{}".format(alpha_loss))
+        print("critic_1_loss:{}".format(critic_1_loss))
+        print("critic_2_loss:{}".format(critic_2_loss))
+        print("actor_loss:{}".format(actor_loss))
+        print("alpha_loss:{}".format(alpha_loss))
 
 
 if __name__ == '__main__':

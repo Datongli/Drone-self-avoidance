@@ -24,34 +24,33 @@ class LayerFC(torch.nn.Module):
         """
         super(LayerFC, self).__init__()
         # self.bn0 = nn.BatchNorm1d(num_in)
-        # self.fc1 = weight_norm(torch.nn.Linear(num_in, 128))
+        # self.fc1 = weight_norm(torch.nn.Linear(num_in, hidden_dim))
         self.fc1 = torch.nn.Linear(num_in, hidden_dim)
         # self.bn1 = nn.BatchNorm1d(128)
-        # self.fc2 = weight_norm(torch.nn.Linear(128, 256))
+        # self.fc2 = weight_norm(torch.nn.Linear(hidden_dim, hidden_dim))
         self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn2 = nn.BatchNorm1d(256)
-        # self.fc3 = weight_norm(torch.nn.Linear(256, 128))
+        # self.fc3 = weight_norm(torch.nn.Linear(hidden_dim, hidden_dim))
         self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn3 = nn.BatchNorm1d(128)
-        # self.fc4 = weight_norm(torch.nn.Linear(128, hidden_dim))
+        # self.fc4 = weight_norm(torch.nn.Linear(hidden_dim, hidden_dim))
         self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
         # self.bn4 = nn.BatchNorm1d(hidden_dim)
         # self.fc5 = weight_norm(torch.nn.Linear(hidden_dim, num_out))
         self.fc5 = torch.nn.Linear(hidden_dim, num_out)
-        self.fc6 = torch.nn.Linear(num_in, hidden_dim)
-        self.fc7 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc8 = torch.nn.Linear(hidden_dim, num_out)
+        self.num_out = num_out
         self.activation = activation
         self.out_fn = out_fn
         # self.scale_factor = nn.Parameter(torch.tensor([random.random() for _ in range(3)]), requires_grad=True)
         # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练的稳定
-        # self.mean = nn.Parameter(torch.zeros((num_in,)), requires_grad=True)
-        # self.std = nn.Parameter(torch.ones((num_in,)), requires_grad=True)
+        self.mean = nn.Parameter(torch.zeros((num_in,)), requires_grad=True)
+        self.std = nn.Parameter(torch.ones((num_in,)), requires_grad=True)
+        self.dropout = torch.nn.Dropout(p=0.1)
         # self.init_weights()
 
     def init_weights(self):
         # 使用 Xavier/Glorot 初始化
-        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc5, self.fc6, self.fc7, self.fc8]:
+        for layer in [self.fc1, self.fc2, self.fc3, self.fc4, self.fc5]:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
                 init.normal_(layer.bias, mean=0, std=1)
@@ -62,41 +61,42 @@ class LayerFC(torch.nn.Module):
         :param x:输入的数据
         :return:归一化之后的输入
         """
+        # print("x_shape:{}".format(x.shape))
+        # print("self_mean_shape:{}".format(self.mean.shape))
+        # print("self_std_shape:{}".format(self.std.shape))
         return (x - self.mean) / self.std
 
     def forward(self, x):
-        # print("输入的x：{}".format(x))
-        # print("输入的x的形状为:{}".format(np.shape(x)))
-        # x = self.bn0(x)
-        # print("通过bn之后的x:{}".format(x))
         # x = self.input_norm(x)
         x = self.fc1(x)
-        # # x = self.bn1(x)
+        # print("self.fc1(x):{}".format(x))
         x = self.activation(x)
+        x = self.dropout(x)
+        # print("self.fc1_activation(x):{}".format(x))
         x = self.fc2(x)
-        # # x = self.bn2(x)
+        # print("self.fc2(x):{}".format(x))
         x = self.activation(x)
+        x = self.dropout(x)
+        # print("self.fc2_activation(x):{}".format(x))
         x = self.fc3(x)
-        # # x = self.bn3(x)
         x = self.activation(x)
+        x = self.dropout(x)
         x = self.fc4(x)
         x = self.activation(x)
+        x = self.dropout(x)
         x = self.fc5(x)
-        # x = self.fc6(x)
-        # x = self.activation(x)
-        # x = self.fc7(x)
-        # x = self.activation(x)
-        # x = self.fc8(x)
-        # print("self.fc8(x):{}".format(x))
+        # with torch.no_grad():
+        #     if self.num_out != 1:
+        #         for line in range(len(x)):
+        #             data_max = 1
+        #             for col in range(3):
+        #                 if abs(x[line][col]) >= data_max:
+        #                     data_max = abs(x[line][col])
+        #             for col in range(3):
+        #                 x[line][col] = x[line][col] / data_max
+        print("self.fc5(x):{}".format(x))
         x = self.out_fn(x)
-        # print("out_fn(x):{}".format(x))
-        # x = self.bn4(x)
-        # print("self.bn4:{}".format(x))
-        # x = self.activation(x)
-        # print("self.activation:{}".format(x))
-        # print("self.fc5:{}".format(self.fc5(x)))
-        # x = self.out_fn(self.fc5(x))
-        # print("输出x:{}".format(x))
+        # print("self.out_fn(x):{}".format(x))
         return x
 
 
@@ -106,7 +106,7 @@ class DDPG:
     """
     def __init__(self, num_in_actor, num_out_actor, num_in_critic, hidden_dim, discrete,
                  action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps,
-                 regularization_strength, wd, device):
+                 wd, device):
         """
         初始化DDPG算法
         :param num_in_actor:策略网络输入节点（状态维度）
@@ -122,7 +122,6 @@ class DDPG:
         :param gamma:折扣因子
         :param max_eps_episode:最大贪心次数
         :param min_eps:最小贪心概率
-        :param regularization_strength:正则化强度
         :param wd:正则化强度
         :param device:设备
         """
@@ -137,8 +136,12 @@ class DDPG:
         self.target_actor.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr, weight_decay=wd)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr, weight_decay=wd)
-        self.actor_scheduler = torch.optim.lr_scheduler.StepLR(self.actor_optimizer, step_size=500, gamma=0.1)
-        self.critic_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_optimizer, step_size=500, gamma=0.1)
+        # self.actor_scheduler = torch.optim.lr_scheduler.StepLR(self.actor_optimizer, step_size=500, gamma=0.1)
+        # self.critic_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_optimizer, step_size=500, gamma=0.1)
+        # self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
+        # self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
+        # self.actor_scheduler = torch.optim.lr_scheduler.StepLR(self.actor_optimizer, step_size=500, gamma=0.1)
+        # self.critic_scheduler = torch.optim.lr_scheduler.StepLR(self.critic_optimizer, step_size=500, gamma=0.1)
         self.gamma = gamma
         # 高斯噪声的标准差，均值直接设为0
         self.sigma = sigma
@@ -147,7 +150,6 @@ class DDPG:
         self.action_dim = num_out_actor
         self.max_eps_episode = max_eps_episode
         self.min_eps = min_eps
-        self.regularization_strength = regularization_strength
         self.device = device
         self.step = 0
         self.train = True
@@ -237,8 +239,8 @@ class DDPG:
         rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(self.device)
         next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
-        print("states:{}".format(states))
-        print("actions:{}".format(actions))
+        print("states:{}".format(states[:5]))
+        print("actions:{}".format(actions[:5]))
         # 计算并更新网络
         next_q_values = self.target_critic(torch.cat([next_states, self.target_actor(next_states)], dim=1))
         q_targets = rewards + self.gamma * next_q_values * (1 - dones)

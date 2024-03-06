@@ -74,12 +74,6 @@ class Environment:
         self.uavs = []
         # 清空建筑对象集合
         self.bds = []
-        """生成风场"""
-        # 风场（风速，风向角）
-        self.WindField = []
-        # 生成随机风力和风向
-        self.WindField.append(np.random.normal(40, 5))  # 生成服从正态分布的对象，均值为40，方差为5
-        self.WindField.append(2 * math.pi * random.random())  # 生成风向，角度制
         """构建建筑物"""
         # 随机生成建筑物，根据难度等级随机循环，同时判断是否有重叠
         while True:
@@ -139,7 +133,7 @@ class Environment:
                 self.target = Target(x, y, z)
                 break
         """随机生成无人机的初始位置"""
-        for _ in range(self.num_uavs):
+        for uav_num in range(self.num_uavs):
             while True:
                 # 生成初始坐标
                 x = random.randint(15, 30)
@@ -154,7 +148,9 @@ class Environment:
                         in_build = 1
                         break
                 if in_build == 0:
-                    self.uavs.append(UAV.UAV(x, y, z, self.agent_r, self))
+                    uav = UAV.UAV(x, y, z, self.agent_r, self)
+                    uav.num = uav_num + 1
+                    self.uavs.append(uav)
                     break
         # 更新无人机状态 np.vstack: 按照行方向堆叠数组  uav.state()是长度为140的列表，代表了各种状态
         self.state = np.vstack([uav.state() for (_, uav) in enumerate(self.uavs)])

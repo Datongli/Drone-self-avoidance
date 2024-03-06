@@ -28,7 +28,7 @@ tau = 0.05
 # 经验回放池大小
 buffer_size = 10000
 # 每一批次选取的经验数量
-batch_size = 64
+batch_size = 16
 # 经验回放池最小经验数目
 minimal_size = batch_size
 # 高斯噪声标准差
@@ -55,9 +55,9 @@ target_entropy = - action_dim
 # SAC模型中的alpha参数学习率
 alpha_lr = 1e-5
 # 最大贪心次数
-max_eps_episode = 10
+max_eps_episode = 0
 # 最小贪心概率
-min_eps = 0.2
+min_eps = 0
 regularization_strength = 0.05
 wd = 0.02
 
@@ -65,7 +65,7 @@ wd = 0.02
 if __name__ == '__main__':
     if test_model == 'DDPG':
         agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
-                     action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, regularization_strength, wd, device)
+                     action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
                     'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         # 装载模型参数
         agent.net_dict[name].load_state_dict(check_point['model'])
     # 真实场景运行
-    env.level = 10  # 环境难度等级
+    env.level = 1  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
     # agent.train = False  # 切换为验证模式
