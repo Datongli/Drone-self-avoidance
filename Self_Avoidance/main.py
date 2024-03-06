@@ -25,17 +25,17 @@ if __name__ == '__main__':
     # SAC模型中的alpha参数学习率
     alpha_lr = 1e-5
     # 迭代次数
-    num_episodes = 50000
+    num_episodes = 100000
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 16
+    hidden_dim = 64
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005
     tau = 0.005
     # 每一批次选取的经验数量
-    batch_size = 128
+    batch_size = 256
     # 经验回放池大小
-    buffer_size = 100000
+    buffer_size = 1000000
     # 经验回放池最小经验数目
     minimal_size = batch_size
     # 高斯噪声标准差
@@ -44,12 +44,11 @@ if __name__ == '__main__':
     state_dim = 63
     # 最大贪心次数，为0是直接根据Q值来选取的动作
     # 想要提升模型的性能，最好把训练的侧重点放在模型上
-    max_eps_episode = 10
+    max_eps_episode = 0
     # 最小贪心概率
-    min_eps = 0.2
+    min_eps = 0
     # 正则化强度
-    regularization_strength = 0.05
-    wd = 0.02
+    wd = 1e-4
     # 暂定直接控制智能体的位移，所以是三维的
     action_dim = 3
     # 目标熵，用于SAC算法
@@ -79,7 +78,7 @@ if __name__ == '__main__':
         # 实例化DDPG对象，其实动作为非离散，所以为False
         agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps,
-                     regularization_strength, wd, device)
+                     wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
                     'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
