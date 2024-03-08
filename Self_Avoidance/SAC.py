@@ -26,33 +26,22 @@ class PolicyNetContinuous(torch.nn.Module):
         :parameter activation: 激活函数
         """
         super(PolicyNetContinuous, self).__init__()
-        # self.bn0 = nn.BatchNorm1d(state_dim)
-        # self.fc1 = weight_norm(torch.nn.Linear(state_dim, 256))
         self.fc1 = torch.nn.Linear(state_dim, hidden_dim)
-        # self.bn1 = nn.BatchNorm1d(256)
-        # self.fc2 = weight_norm(torch.nn.Linear(256, 512))
         self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        # self.bn2 = nn.BatchNorm1d(512)
-        # self.fc3 = weight_norm(torch.nn.Linear(512, 256))
         self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
-        # self.bn3 = nn.BatchNorm1d(256)
-        # self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
         self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.fc5 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.fc6 = torch.nn.Linear(hidden_dim, hidden_dim)
-        # self.bn4 = nn.BatchNorm1d(hidden_dim)
-        # self.fc_mu = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.fc_mu = torch.nn.Linear(hidden_dim, action_dim)
-        # self.fc_std = weight_norm(torch.nn.Linear(hidden_dim, action_dim))
         self.fc_std = torch.nn.Linear(hidden_dim, action_dim)
         self.activation_bound = action_bound
         self.activation = activation
-        # self.activation = torch.tanh
+        self.bn = nn.BatchNorm1d(hidden_dim)
         # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练
         self.policy_mean = nn.Parameter(torch.zeros((state_dim,)), requires_grad=True)
         self.policy_std = nn.Parameter(torch.ones((state_dim,)), requires_grad=True)
         # 初始化参数
-        self.init_weights()
+        # self.init_weights()
 
     def init_weights(self):
         # 使用 Xavier/Glorot 初始化
@@ -75,49 +64,35 @@ class PolicyNetContinuous(torch.nn.Module):
         :param x:输入的值
         :return: 输出动作，对数概率密度
         """
-        # 通过第一个全连接层并使用ReLU激活函数
-        # x = nn.PReLU(self.fc1(x))
-        # x = self.bn0(x)
-        # print("输入的x:{}".format(x))
-        # x = self.input_norm(x)
-        # print("通过归一化之后的x:{}".format(x))
         x = self.fc1(x)
-        # print("通过第一层之后的:{}".format(x))
-        # x = self.bn1(x)
+        x = self.bn(x)
         x = self.activation(x)
-        # print("通过激活函数之后的:{}".format(x))
         x = self.fc2(x)
-        # x = self.bn2(x)
+        x = self.bn(x)
         x = self.activation(x)
         x = self.fc3(x)
-        # x = self.bn3(x)
+        x = self.bn(x)
         x = self.activation(x)
         x = self.fc4(x)
-        # x = self.bn4(x)
+        x = self.bn(x)
         x = self.activation(x)
-        # 通过第二个全连接层获得均值
-        # print("x:{}".format(x))
         x = self.fc5(x)
+        x = self.bn(x)
         x = self.activation(x)
         x = self.fc6(x)
+        x = self.bn(x)
         x = self.activation(x)
         mu = self.fc_mu(x)
         # 使用Softplus激活函数处理第三个全连接层的输出，得到标准差
         std = F.softplus(self.fc_std(x))
-        # print("mu:{}".format(mu))
-        # print("std:{}".format(std))
         # 创建正态分布对象，以均值和标准差作为参数
         dist = Normal(mu, std)
         # 从正态分布中进行重参数化采样，以获得动作
         normal_sample = dist.rsample()
-        # print("mu:{}".format(mu))
-        # print("std:{}".format(std))
-        # print("normal_sample:{}".format(normal_sample))
         # 计算正态分布的对数概率密度
         log_prob = dist.log_prob(normal_sample)
         # 将采样得到的值通过tanh函数映射到[-1, 1]范围
         action = torch.tanh(normal_sample)
-        # print("action:{}".format(action))
         # 计算tanh_normal分布的对数概率密度
         log_prob = log_prob - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)
         # 将动作缩放到合适的范围
@@ -141,29 +116,19 @@ class QValueNetContinuous(torch.nn.Module):
         :param activation: 激活函数
         """
         super(QValueNetContinuous, self).__init__()
-        # self.bn0 = nn.BatchNorm1d(state_dim + action_dim)
-        # self.fc1 = weight_norm(torch.nn.Linear(state_dim + action_dim, 256))
         self.fc1 = torch.nn.Linear(state_dim + action_dim, hidden_dim)
-        # self.bn1 = nn.BatchNorm1d(256)
-        # self.fc2 = weight_norm(torch.nn.Linear(256, 512))
         self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        # self.bn2 = nn.BatchNorm1d(512)
-        # self.fc3 = weight_norm(torch.nn.Linear(512, 256))
         self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
-        # self.bn3 = nn.BatchNorm1d(256)
-        # self.fc4 = weight_norm(torch.nn.Linear(256, hidden_dim))
         self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
-        # self.bn4 = nn.BatchNorm1d(hidden_dim)
-        # self.fc_out = weight_norm(torch.nn.Linear(hidden_dim, 1))
         self.fc5 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.fc6 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.fc_out = torch.nn.Linear(hidden_dim, 1)
+        self.bn = nn.BatchNorm1d(hidden_dim)
         self.activation = activation
-        # self.activation = torch.tanh
         # 定义可以训练的均值和方差，用于在输入时归一化输入，有利于训练
         self.value_mean = nn.Parameter(torch.zeros((state_dim + action_dim,)), requires_grad=True)
         self.value_std = nn.Parameter(torch.ones((state_dim + action_dim,)), requires_grad=True)
-        self.init_weights()
+        # self.init_weights()
 
     def init_weights(self):
         # 使用 Xavier/Glorot 初始化
@@ -188,22 +153,23 @@ class QValueNetContinuous(torch.nn.Module):
         :return: 判断的价值
         """
         x = torch.cat([x, a], dim=1)
-        # x = self.bn0(x)
-        # print("输入的x为：{}".format(x))
-        x = self.input_norm(x)
         x = self.fc1(x)
-        # print("通过第一层全连接之后：{}".format(x))
+        # x = self.bn(x)
         x = self.activation(x)
-        # print("通过激活层：{}".format(x))
         x = self.fc2(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.fc3(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.fc4(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.fc5(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.fc6(x)
+        # x = self.bn(x)
         x = self.activation(x)
         return self.fc_out(x)
 

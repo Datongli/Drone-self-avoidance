@@ -11,6 +11,10 @@ import tools
 from DDPG import DDPG
 from SAC import SACContinuous
 import environment
+# 可以显示中文
+from pylab import mpl
+mpl.rcParams["font.sans-serif"] = ["SimHei"]
+mpl.rcParams["axes.unicode_minus"] = False
 
 
 if __name__ == '__main__':
@@ -19,21 +23,21 @@ if __name__ == '__main__':
     # 选择训练模型是DDPG还是SAC
     train_model = 'DDPG'
     # 策略网络学习率
-    actor_lr = 1e-4
+    actor_lr = 1e-3
     # 价值网络学习率
-    critic_lr = 1e-4
+    critic_lr = 1e-3
     # SAC模型中的alpha参数学习率
     alpha_lr = 1e-5
     # 迭代次数
-    num_episodes = 100000
+    num_episodes = 200
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 64
+    hidden_dim = 32
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005
-    tau = 0.005
+    tau = 0.05
     # 每一批次选取的经验数量
-    batch_size = 256
+    batch_size = 128
     # 经验回放池大小
     buffer_size = 1000000
     # 经验回放池最小经验数目
@@ -48,7 +52,7 @@ if __name__ == '__main__':
     # 最小贪心概率
     min_eps = 0
     # 正则化强度
-    wd = 1e-4
+    wd = 0.0
     # 暂定直接控制智能体的位移，所以是三维的
     action_dim = 3
     # 目标熵，用于SAC算法
@@ -76,7 +80,7 @@ if __name__ == '__main__':
     # 实例化智能体对象，可以选择使用的训练模型
     if train_model == 'DDPG':
         # 实例化DDPG对象，其实动作为非离散，所以为False
-        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
+        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, batch_size,False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps,
                      wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
@@ -97,15 +101,17 @@ if __name__ == '__main__':
 
     # 绘图
     episodes_list = list(range(len(return_list)))
-    plt.plot(episodes_list, return_list)
-    plt.xlabel('Episodes')
-    plt.ylabel('Returns')
-    plt.title('DDPG')
-    plt.show()
-
     mv_return = tools.moving_average(return_list, 9)
-    plt.plot(episodes_list, mv_return)
-    plt.xlabel('Episodes')
-    plt.ylabel('Returns')
-    plt.title('DDPG')
+    # 新建一个二维图形窗口
+    fig_2d = plt.figure()
+    # 添加一个二维子图
+    ax_2d = fig_2d.add_subplot(1, 1, 1)
+    ax_2d.plot(episodes_list, return_list, color='blue', label='原本训练记录')
+    ax_2d.plot(episodes_list, mv_return, color='orange', label='滑动平均记录')
+
+    ax_2d.legend()
+    ax_2d.set_xlabel('轮次')
+    ax_2d.set_ylabel('返回值')
+    ax_2d.set_title('只考虑寻迹')
+    # 显示图形
     plt.show()

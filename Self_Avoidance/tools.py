@@ -168,12 +168,22 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         env.uavs[i].num = num
                         # 更新步数，用于贪心策略的计算
                         agent.step = env.uavs[i].step
-                        # 得到输入的状态
-                        state_input = state[i]
-                        state_input = torch.tensor(state_input, dtype=torch.float).to(device)
-                        # 增加一个维度
-                        state_input = torch.unsqueeze(state_input, dim=0)
-                        # print("state_input:{}".format(state_input))
+                        """尝试添加bn之后，更改状态输入"""
+                        if replay_buffer.size() >= minimal_size:
+                            agent.actor.train()
+                            bn_s, _, _, _, _ = replay_buffer.sample(batch_size)
+                            # 增加成二维的数组方便整合
+                            state_alone = np.array([state[i]])
+                            # 整合单独的状态和经验回放池中抽取的状态，用于应用
+                            state_input = np.vstack((state_alone, bn_s[: -1]))
+                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
+                        else:
+                            agent.actor.eval()
+                            state_input = state[i]
+                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
+                            # # 增加一个维度
+                            state_input = torch.unsqueeze(state_input, dim=0)
+                        """继续训练"""
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
                         # 得到下一个状态，奖励，是否完成，状态的类别（电量耗尽，坠机，到达目标点位等等）
@@ -193,15 +203,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         """找到问题了"""
                         # 将状态、动作、奖励、下一状态、是否结束 打包放入经验回放池
                         replay_buffer.add(state[i], action, reward, next_state, uav_done)
-                        # 检查经验回放池中的经验，查找是哪里出了问题
-                        # for experience in replay_buffer.buffer:
-                        #     ls, la, lr, lns, ld = experience
-                        #     print("ls:{}".format(ls))
-                        #     print("la:{}".format(la))
-                        #     print("lr:{}".format(lr))
-                        #     print("lns:{}".format(lns))
-                        #     print("ld:{}".format(ld))
-                        # print("*" * 100)
                         """判断状态的类别"""
                         if info == 1:
                             # 如果到达目标点，完成目标的无人机数量加1
@@ -229,10 +230,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         break
                 """每迭代一次，更新网络"""
                 # 如果达到经验回放池的最低要求，同时1次迭代跟新一次参数
-                # print("replay_buffer.size():{}".format(replay_buffer.size()))  # 打印经验回放池的大小
-                # for experience in replay_buffer.buffer:
-                #     lls, lla, llr, llns, lld = experience
-                #     print("ls:{}".format(lls[11:]))
                 if replay_buffer.size() > minimal_size and (i_episode + 1) % 1 == 0:
                     b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(batch_size)
                     transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r,
@@ -241,13 +238,13 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     agent.update(transition_dict)
                     """学习率更新"""
                     # 是按照进入判断的次数来更新的
-                    # if train_model == 'DDPG':
-                    #     agent.actor_scheduler.step()
-                    #     agent.critic_scheduler.step()
-                    # if train_model == 'SAC':
-                    #     agent.actor_scheduler.step()
-                    #     agent.critic_1_scheduler.step()
-                    #     agent.critic_2_scheduler.step()
+                    if train_model == 'DDPG':
+                        agent.actor_scheduler.step()
+                        agent.critic_scheduler.step()
+                    if train_model == 'SAC':
+                        agent.actor_scheduler.step()
+                        agent.critic_1_scheduler.step()
+                        agent.critic_2_scheduler.step()
                     """打印模型的参数"""
                     # 检查模型的参数
                     # print("*" * 100)
@@ -281,6 +278,8 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 if len(success_list) >= 10:
                     # 得到升级与否
                     level_up_or_not = level_up(success_list)
+                    """先训练无人机飞往目标点的能力"""
+                    level_up_or_not = False
                     # 如果可以升级同时环境的等级小于10，升级
                     if level_up_or_not and env.level < 10:
                         env.level += 1
@@ -291,6 +290,9 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         format(epoch_all, (j * num_episodes / 10 + i_episode + 1), episode_return, env.level, success_count, crash_count, bt_count, over_count))
                 """保存模型参数"""
                 if (i_episode + 1) % 10 == 0:
+                    """保存一次的bn，用于验证"""
+                    # 使用逗号作为分隔符，格式为浮点数
+                    np.savetxt('bn.txt', bn_s, fmt='%f', delimiter=',')
                     # 保存批量状态，用于验证
                     # 每10周期保存一次网络参数
                     if train_model == 'DDPG':

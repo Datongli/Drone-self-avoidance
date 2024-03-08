@@ -14,13 +14,13 @@ matplotlib.use('TkAgg')  # 或者其他后端
 # 选择模型
 test_model = 'DDPG'
 # 策略网络学习率
-actor_lr = 1e-4
+actor_lr = 1e-3
 # 价值网络学习率
-critic_lr = 1e-4
+critic_lr = 1e-3
 # 迭代次数
 num_episodes = 50000
 # 隐藏节点，先暂定64，后续可以看看效果
-hidden_dim = 16
+hidden_dim = 32
 # 折扣因子
 gamma = 0.99
 # 软更新参数
@@ -28,7 +28,7 @@ tau = 0.05
 # 经验回放池大小
 buffer_size = 10000
 # 每一批次选取的经验数量
-batch_size = 16
+batch_size = 128
 # 经验回放池最小经验数目
 minimal_size = batch_size
 # 高斯噪声标准差
@@ -58,13 +58,12 @@ alpha_lr = 1e-5
 max_eps_episode = 0
 # 最小贪心概率
 min_eps = 0
-regularization_strength = 0.05
-wd = 0.02
+wd = 0.0
 
 
 if __name__ == '__main__':
     if test_model == 'DDPG':
-        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
+        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, batch_size, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
@@ -85,10 +84,10 @@ if __name__ == '__main__':
         # 装载模型参数
         agent.net_dict[name].load_state_dict(check_point['model'])
     # 真实场景运行
-    env.level = 1  # 环境难度等级
+    env.level = 0  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
-    # agent.train = False  # 切换为验证模式
+    # agent.actor.eval()
     total_reward = 0
     env.render(1)  # 绘制并渲染建筑物
 
@@ -104,10 +103,12 @@ if __name__ == '__main__':
                 break
             # 更新agent中的步数
             agent.step = env.uavs[0].step
-            state = torch.tensor(state[0], dtype=torch.float).to(device)
+            state = torch.tensor([state[0]], dtype=torch.float).to(device)
+            bn_s = np.loadtxt('bn.txt', delimiter=',')
+            bn_s = torch.tensor(bn_s, dtype=torch.float).to(device)
+            state_input = torch.cat((state, bn_s[1:, :]), 0)
             # 增加一个维度
-            state = torch.unsqueeze(state, dim=0)
-            action = agent.take_action(state)[0]
+            action = agent.take_action(state_input)[0]
             # 根据选取的动作改变状态，获取收益
             next_state, reward, uav_done, info = env.step(action, 0)
             # 求总收益

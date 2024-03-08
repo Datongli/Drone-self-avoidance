@@ -49,7 +49,7 @@ class Environment:
         # 可以运动的空间(对角线形式)
         self.action_area = action_area
         # 课程学习的水平(训练难度等级)
-        self.level = 1
+        self.level = 0
         # 无人机对象的集合，为了提升效率，每次不单单使用一个无人机进行搜索，可以是多个
         self.uavs = []
         # 建筑集合
@@ -76,9 +76,12 @@ class Environment:
         self.bds = []
         """构建建筑物"""
         # 随机生成建筑物，根据难度等级随机循环，同时判断是否有重叠
+        # 要生成建筑物的数量，依据课程学习的难度进行
+        building_num = random.randint(self.level, self.level * 2)
         while True:
-            # 要生成建筑物的数量，依据课程学习的难度进行
-            building_num = random.randint(self.level, self.level * 2)
+            # 判断是否达到要生成的数量
+            if len(self.bds) >= building_num:
+                break
             # 建筑物中心的x坐标
             x = random.uniform(10, self.action_area[1][0] - 10)
             # 建筑物中心的y坐标
@@ -111,9 +114,6 @@ class Environment:
                 # 如果没有重叠
                 if overlop_num == 0:
                     self.bds.append(Building(x, y, length, width, height, left_down, right_up))
-            # 判断是否达到要生成的数量
-            if len(self.bds) >= building_num:
-                break
         """随机生成目标点的位置"""
         while True:
             # 生成目标点位
