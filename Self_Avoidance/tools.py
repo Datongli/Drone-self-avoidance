@@ -101,7 +101,7 @@ def epsilon_annealing(i_epsiode, max_episode, min_eps: float):
 
 
 def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
-                           train_model, device):
+                           train_model, actor_pth_load, device):
     """
     用于离线策略的训练函数
     :param env:可以交互的环境实例
@@ -113,6 +113,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     :param pth_load:pth文件的存放地址字典
     :param retrain: 是否重新开始训练
     :param train_model:训练的模型是什么
+    :param actor_pth_load: 存放只寻迹或者只避障的actor网络的pth文件
     :param device: 设备
     :return:训练的结果
     """
@@ -134,6 +135,12 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
             # 取出训练的迭代次数，用于继续训练
             epoch_all = check_point['epoch']
     else:
+        """给actor和target_actor的寻迹和避障加上两个初始权重"""
+        # for name, pth in actor_pth_load.items():
+        #     # 按照键名称取出存档点
+        #     check_point = torch.load(actor_pth_load[name], map_location=device)
+        #     # 装载模型参数
+        #     agent.actor_dict[name].load_state_dict(check_point['model'])
         # 注意这里，如果权重不存在，需要先给迭代次数置0
         epoch_all = 0
     # 打印一下每一个模型的参数，作为检查
@@ -158,6 +165,12 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 # 得到状态的初始值，类型是np.ndarray
                 # 环境重置 state是以无人机数目为行数，140为列数的列表
                 state = env.reset()
+                # # 检查模型的参数
+                # print("*" * 100)
+                # for name, pth in actor_pth_load.items():
+                #     # 打印每一个模型
+                #     for model_name, param in agent.actor_dict[name].named_parameters():
+                #         print("name:{}, param:{}".format(model_name, param))
                 while True:
                     # 对于每个无人机对象来说
                     for i in range(len(env.uavs)):
@@ -246,12 +259,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         agent.critic_1_scheduler.step()
                         agent.critic_2_scheduler.step()
                     """打印模型的参数"""
-                    # 检查模型的参数
-                    # print("*" * 100)
-                    # for name, pth in pth_load.items():
-                    #     # 打印每一个模型
-                    #     for model_name, param in agent.net_dict[name].named_parameters():
-                    #         print("name:{}, param:{}".format(model_name, param))
                 # 打印每一个无人机的奖励，看看
                 for uav in env.uavs:
                     # print("reward:{}".format(uav.reward))
@@ -265,7 +272,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     # 不看撞毁的
                     # if uav.info == 2:
                     #     continue
-                    print("state:{}".format(uav.now_state))
+                    print("state={}".format(uav.now_state))
                     print("action:{}".format(uav.action))
                     #     print("r_n_distance:{}".format(uav.r_n_distance))
                 # 如果有80%的无人机到达了目标区域
@@ -278,8 +285,8 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 if len(success_list) >= 10:
                     # 得到升级与否
                     level_up_or_not = level_up(success_list)
-                    """先训练无人机飞往目标点的能力"""
-                    level_up_or_not = False
+                    """先训练无人机飞往目标点的能力，然后训练无人机避障的能力"""
+                    # level_up_or_not = False
                     # 如果可以升级同时环境的等级小于10，升级
                     if level_up_or_not and env.level < 10:
                         env.level += 1
@@ -292,7 +299,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 if (i_episode + 1) % 10 == 0:
                     """保存一次的bn，用于验证"""
                     # 使用逗号作为分隔符，格式为浮点数
-                    np.savetxt('bn.txt', bn_s, fmt='%f', delimiter=',')
+                    np.savetxt('all_bn.txt', bn_s, fmt='%f', delimiter=',')
                     # 保存批量状态，用于验证
                     # 每10周期保存一次网络参数
                     if train_model == 'DDPG':

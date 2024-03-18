@@ -35,7 +35,7 @@ class UAV:
         self.step = 1  # 无人机已走步数
         self.p_crash = 0  # 无人机坠毁概率
         self.done = False  # 终止状态
-        self.nearest_distance = 5  # 最近的障碍物的距离
+        self.nearest_distance = 20  # 最近的障碍物的距离
         # 无人机初始状态距离目标点的距离
         self.d_origin = math.sqrt((self.x - self.env.target.x) ** 2 + (self.y - self.env.target.y) ** 2 + (self.z - self.env.target.z) ** 2)
         # 无人机当前距离目标点的距离
@@ -57,40 +57,107 @@ class UAV:
         self.now_state = []
         self.num = 1
 
-    def check_collision(self, sphere_center, sphere_radius, min_bound, max_bound):
+    def check_collision(self, sphere_center, sphere_radius, min_bound, max_bound, i=0, j=0, k=0):
         """
         判断球体和立方体是否相撞，以及计算距离的函数
         :param sphere_center:球体球心
         :param sphere_radius: 球体半径
         :param min_bound:立方体最左下角的点
         :param max_bound:立方体最右上角的点
+        :param i: 无人机的x方向传感器点位
+        :param j: 无人机的y方向传感器点位
+        :param k: 无人机的z方向传感器点位
         :return:是否相撞，距离
         """
+        zero_num = 0
+        if i == 0:
+            zero_num += 1
+        if j == 0:
+            zero_num += 1
+        if k == 0:
+            zero_num += 1
         min_bound = np.array(min_bound)
         max_bound = np.array(max_bound)
         # 将球心坐标限制在立方体边界内
         closest_point = np.clip(sphere_center, min_bound, max_bound)
-        # 计算球心到最近点的距离
-        distance = np.linalg.norm(sphere_center - closest_point)
+        if zero_num == 2:
+            ijk_same = 0
+            pos_or_neg = 0
+            # 如果ijk中有两个值为0，则证明这是上下前后左右里面的一个传感器
+            for coordinate in range(3):
+                # 让传感器只关注其正前方的障碍物，及传感器和障碍物的三维坐标中两个是相同的
+                if sphere_center[coordinate] == closest_point[coordinate]:
+                    ijk_same += 1
+            if i != 0 and j == 0 and k == 0:
+                # 左右传感器
+                order_num = 0
+                pos_or_neg = i
+            if i == 0 and j != 0 and k == 0:
+                # 前后传感器
+                order_num = 1
+                pos_or_neg = j
+            if i == 0 and j == 0 and k != 0:
+                # 上下传感器
+                order_num = 2
+                pos_or_neg = k
+            if sphere_center[order_num] != closest_point[order_num]:
+                if (pos_or_neg > 0 and sphere_center[order_num] < closest_point[order_num]) or (pos_or_neg < 0 and sphere_center[order_num] > closest_point[order_num]):
+                    ijk_same += 0
+                else:
+                    ijk_same += 1
+            else:
+                ijk_same += 1
+            if ijk_same == 2:
+                distance = np.linalg.norm(sphere_center - closest_point)
+            else:
+                distance = 1000
+        else:
+            # 其他传感器直接计算球心到最近点的距离
+            distance = np.linalg.norm(sphere_center - closest_point)
+        # 增加一个如果传感器已经在建筑物里的
+        if np.array_equal(sphere_center, closest_point):
+            distance = 0
         # 返回是否相撞、距离
         return distance <= sphere_radius, distance
 
-    def col_limit_distance(self, sphere_center):
+    def col_limit_distance(self, sphere_center, i=0, j=0, k=0):
         """
         判断无人机对象和六个边界的最近距离
         :param sphere_center: 无人机的中心点，array类型的一维数组
+        :param i: 无人机的x方向传感器点位
+        :param j: 无人机的y方向传感器点位
+        :param k: 无人机的z方向传感器点位
         :return: 无人机和边界的最近距离
         """
         # 用于承接距离的列表
         distance = []
         # xyz三维坐标
-        for i in range(3):
+        for count1 in range(3):
+            # 将几个特殊的传感器分离开
+            if i == 0 and j == 0 and k != 0:
+                count1 = 2
+            if i == 0 and j != 0 and k == 0:
+                count1 = 1
+            if i != 0 and j == 0 and k == 0:
+                count1 = 0
             # 每个方向上两个边界
-            for j in range(2):
+            for count2 in range(2):
+                if i == 0 and j == 0 and k == -1:
+                    count2 = 0
+                if i == 0 and j == 1 and k == 0:
+                    count2 = 1
+                if i == -1 and j == 0 and k == 0:
+                    count2 = 0
+                if i == 1 and j == 0 and k == 0:
+                    count2 = 1
+                if i == 0 and j == -1 and k == 0:
+                    count2 = 0
+                if i == 0 and j == 0 and k == 1:
+                    count2 = 1
                 # 直接做减法即可
-                distance.append(abs(sphere_center[i] - self.env.action_area[j][i]))
+                distance.append(abs(sphere_center[count1] - self.env.action_area[count2][count1]))
             # 如果超出了边界，直接返回距离为0，代表撞击上了
-            if sphere_center[i] <= self.env.action_area[0][1] or sphere_center[i] >= self.env.action_area[1][i]:
+            if sphere_center[count1] <= self.env.action_area[0][1] or sphere_center[count1] >= self.env.action_area[1][count1]:
                 return 0
         # 返回最小距离
         return min(distance)
@@ -130,8 +197,18 @@ class UAV:
         for i in range(-1, 2):
             for j in range(-1, 2):
                 for k in range(-1, 2):
+                    # 尝试一下只看 上下前后左右6个传感器的
+                    zero_num = 0
+                    if i == 0:
+                        zero_num += 1
+                    if j == 0:
+                        zero_num += 1
+                    if k == 0:
+                        zero_num += 1
+                    if zero_num != 2:
+                        continue
                     # 将无人机原点扣掉
-                    if i == 1 and j == 0 and k == 0:
+                    if i == 0 and j == 0 and k == 0:
                         continue
                     # 初始化最短距离
                     nearest_distance_normal = 1000
@@ -141,13 +218,17 @@ class UAV:
                     # 判断与建筑物的最近距离
                     for building in self.env.bds:
                         # 计算距离建筑物的最近距离
-                        collision, build_distance = self.check_collision(np.array([self.x + i, self.y + j, self.z + k]), self.agent_r, building.left_down, building.right_up)
+                        collision, build_distance = self.check_collision(np.array([self.x + i, self.y + j, self.z + k]),
+                                                                         self.agent_r, building.left_down, building.right_up, i=i, j=j, k=k)
+                        # 无人机最上方的传感器，只需要判断与活动区域天花板的距离即可
+                        if i == 0 and j == 0 and k == 1:
+                            build_distance = nearest_distance_normal
                         collision_list.append(collision)
                         if build_distance <= nearest_distance:
                             # 更新最近距离
                             nearest_distance = build_distance
                     # 计算与边界的最近距离
-                    limit_distance = self.col_limit_distance(np.array([self.x + i, self.y + j, self.z + k]))
+                    limit_distance = self.col_limit_distance(np.array([self.x + i, self.y + j, self.z + k]), i=i, j=j, k=k)
                     # if (True in collision_list) or limit_distance == 0:
                     #     state_grid.append(1)
                     # else:
@@ -157,16 +238,14 @@ class UAV:
                     # state_grid.append(nearest_distance_normal - nearest_distance)
                     state_grid.append(nearest_distance)
                     # state_grid.append((nearest_distance_normal - nearest_distance) / nearest_distance_normal)
-                    detector_distance = math.sqrt((self.x + i - self.env.target.x) ** 2 +
-                                                  (self.y + j - self.env.target.y) ** 2 +
-                                                  (self.z + k - self.env.target.z) ** 2)
+                    # detector_distance = math.sqrt((self.x + i - self.env.target.x) ** 2 +
+                    #                               (self.y + j - self.env.target.y) ** 2 +
+                    #                               (self.z + k - self.env.target.z) ** 2)
                     # detector_distance = math.sqrt((self.x + i - self.env.target.x) ** 2 +
                     #                               (self.y + j - self.env.target.y) ** 2 +
                     #                               (self.z + k - self.env.target.z) ** 2) / self.d_origin
-                    state_grid.append(detector_distance)
-        # state_grid.append(self.num)
+                    # state_grid.append(detector_distance)
         # 得到无人机的状态
-        # 728+16=744
         return state_grid
 
     def update(self, action):
@@ -176,7 +255,7 @@ class UAV:
         :return:奖励，是否结束一轮迭代，额外信息
         """
         # 个人认为每次应该给它赋初值，不然就是上一个状态的最近距离
-        self.nearest_distance = 5
+        self.nearest_distance = 20
         """返回参数"""
         done = False
         info = 4
@@ -253,7 +332,7 @@ class UAV:
         """计算总奖励r"""
         # 爬升奖励+目标奖励+能耗奖励-坠毁系数*坠毁概率
         # reword = (r_climb + r_target + r_e - crash * self.p_crash + r_n_distance) * 1e-1
-        reword = 0.1 * (Ddistance - (abs(dx) + abs(dy) + abs(dz)))
+        reword = 0.1 * (Ddistance - (abs(dx) + abs(dy) + abs(dz))) + 0.01 * self.nearest_distance
         # print("没有经过加减的reward:{}".format(reword))
         # reword = r_climb + r_target + r_e - crash * self.p_crash
         self.r_climb.append(r_climb)
@@ -277,27 +356,27 @@ class UAV:
             # 发生碰撞，产生巨大惩罚
             # 根据碰撞点距离目标的远近来设置奖励的大小
             if self.distance <= 10:
-                reword -= 0
+                reword -= 10
                 done = True
                 info = 2
             else:
-                reword -= 0
+                reword -= 20
                 done = True
                 info = 2
-        if self.distance <= 3:
+        if self.distance <= 2:
             # 到达目标点，给予大量奖励
-            reword += 10
+            reword += 20
             done = True
             info = 1
         # 注意平衡探索步长和碰撞的关系
         if self.step >= 6 * self.d_origin + 6 * self.env.action_area[1][2]:
             # 步数超过最差步长（2*初始距离+2*空间高度），给予惩罚
-            reword -= 0
+            reword -= 5
             done = True
             info = 5
         if self.cost > self.bt:
             # 电量耗尽，给予大量惩罚
-            reword -= 0
+            reword -= 5
             done = True
             info = 3
         """更新无人机的坐标值"""

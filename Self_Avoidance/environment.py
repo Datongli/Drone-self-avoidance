@@ -49,7 +49,7 @@ class Environment:
         # 可以运动的空间(对角线形式)
         self.action_area = action_area
         # 课程学习的水平(训练难度等级)
-        self.level = 0
+        self.level = 1
         # 无人机对象的集合，为了提升效率，每次不单单使用一个无人机进行搜索，可以是多个
         self.uavs = []
         # 建筑集合
@@ -78,6 +78,7 @@ class Environment:
         # 随机生成建筑物，根据难度等级随机循环，同时判断是否有重叠
         # 要生成建筑物的数量，依据课程学习的难度进行
         building_num = random.randint(self.level, self.level * 2)
+        # building_num = 1
         while True:
             # 判断是否达到要生成的数量
             if len(self.bds) >= building_num:
@@ -92,6 +93,11 @@ class Environment:
             width = random.uniform(1, 5)
             # 建筑物高度
             height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 8)
+            # x = 50
+            # y = 50
+            # length = 30
+            # width = 30
+            # height = 24
             # 建筑物左下角的点
             left_down = [x - length, y - width, 0]
             # 建筑物右上角的点
@@ -120,6 +126,9 @@ class Environment:
             x = random.randint(60, 90)
             y = random.randint(10, 90)
             z = random.randint(5, self.action_area[1][2] - 3)
+            # x = 90
+            # y = 90
+            # z = 20
             # 判断目标是否在障碍物中
             in_build = 0  # 标志位
             for building in self.bds:
@@ -138,8 +147,14 @@ class Environment:
                 # 生成初始坐标
                 x = random.randint(15, 30)
                 y = random.randint(10, 90)
-                z = random.randint(3, 7)
+                z = random.randint(4, 7)
+                # x = 10
+                # y = 50
+                # z = 5
+                # 判断是否与建筑物重合的标志位
                 in_build = 0
+                # 判断无人机和目标点连线上是否有障碍物的标志位
+                # 在等级4后应该有，以增加环境的复杂性
                 # 确保没有生成在障碍物的区域
                 for building in self.bds:
                     if (building.left_down[0] - 2 <= x <= building.right_up[0] + 2

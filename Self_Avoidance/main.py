@@ -29,9 +29,9 @@ if __name__ == '__main__':
     # SAC模型中的alpha参数学习率
     alpha_lr = 1e-5
     # 迭代次数
-    num_episodes = 200
+    num_episodes = 2000
     # 隐藏节点，先暂定64，后续可以看看效果
-    hidden_dim = 32
+    hidden_dim = 64
     # 折扣因子
     gamma = 0.99
     # 软更新参数 原来为0.005
@@ -44,15 +44,15 @@ if __name__ == '__main__':
     minimal_size = batch_size
     # 高斯噪声标准差
     sigma = 0.01
-    # 三维环境下动作，加上一堆状态的感知，目前是15+26=41个
-    state_dim = 63
+    # 状态纬度，目前是无人机三维坐标，三维坐标变化量，目标点三维坐标
+    num_in_actor = 17
     # 最大贪心次数，为0是直接根据Q值来选取的动作
     # 想要提升模型的性能，最好把训练的侧重点放在模型上
     max_eps_episode = 0
     # 最小贪心概率
     min_eps = 0
     # 正则化强度
-    wd = 0.0
+    wd = 0.001
     # 暂定直接控制智能体的位移，所以是三维的
     action_dim = 3
     # 目标熵，用于SAC算法
@@ -80,15 +80,23 @@ if __name__ == '__main__':
     # 实例化智能体对象，可以选择使用的训练模型
     if train_model == 'DDPG':
         # 实例化DDPG对象，其实动作为非离散，所以为False
-        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, batch_size,False,
+        agent = DDPG(num_in_actor, action_dim, num_in_actor + action_dim, hidden_dim, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps,
                      wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
                     'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
                     'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
+        # 寻迹和避障的初始权重
+        # actor_pth_load = {'actor_tracing': r'C:\Users\Lenovo\Desktop\训练权重保存\本科毕设\DDPG\只寻迹\参数2\actor_tracing.pth',
+        #                   'actor_avoid': r'C:\Users\Lenovo\Desktop\训练权重保存\本科毕设\DDPG\只避障\actor_avoid.pth',
+        #                   'target_actor_tracing': r'C:\Users\Lenovo\Desktop\训练权重保存\本科毕设\DDPG\只寻迹\参数2\target_actor_tracing.pth',
+        #                   'target_actor_avoid': r'C:\Users\Lenovo\Desktop\训练权重保存\本科毕设\DDPG\只避障\target_actor_avoid.pth'}
+        actor_pth_load = {
+            'actor_tracing': r'C:\Users\Lenovo\Desktop\训练权重保存\本科毕设\DDPG\只寻迹\参数2\actor_tracing.pth',
+            'target_actor_tracing': r'C:\Users\Lenovo\Desktop\训练权重保存\本科毕设\DDPG\只寻迹\参数2\target_actor_tracing.pth'}
     if train_model == 'SAC':
-        agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
+        agent = SACContinuous(num_in_actor, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
                               alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, wd, device)
         pth_load = {'SAC_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\SAC_actor.pth',
                     "critic_1": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
@@ -97,7 +105,7 @@ if __name__ == '__main__':
                     'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
     # 得到返回的奖励列表
     return_list = tools.train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
-                                               train_model, device)
+                                               train_model, actor_pth_load, device)
 
     # 绘图
     episodes_list = list(range(len(return_list)))
@@ -112,6 +120,6 @@ if __name__ == '__main__':
     ax_2d.legend()
     ax_2d.set_xlabel('轮次')
     ax_2d.set_ylabel('返回值')
-    ax_2d.set_title('只考虑寻迹')
+    ax_2d.set_title('综合')
     # 显示图形
     plt.show()
