@@ -104,9 +104,9 @@ class UAV:
                 if (pos_or_neg > 0 and sphere_center[order_num] < closest_point[order_num]) or (pos_or_neg < 0 and sphere_center[order_num] > closest_point[order_num]):
                     ijk_same += 0
                 else:
-                    ijk_same += 1
+                    ijk_same += 3
             else:
-                ijk_same += 1
+                ijk_same += 3
             if ijk_same == 2:
                 distance = np.linalg.norm(sphere_center - closest_point)
             else:

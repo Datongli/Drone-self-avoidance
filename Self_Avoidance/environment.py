@@ -92,12 +92,12 @@ class Environment:
             # 建筑物y方向宽度的一半
             width = random.uniform(1, 5)
             # 建筑物高度
-            height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 8)
+            height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 5)
             # x = 50
             # y = 50
             # length = 30
             # width = 30
-            # height = 24
+            # height = 20
             # 建筑物左下角的点
             left_down = [x - length, y - width, 0]
             # 建筑物右上角的点
@@ -125,7 +125,7 @@ class Environment:
             # 生成目标点位
             x = random.randint(60, 90)
             y = random.randint(10, 90)
-            z = random.randint(5, self.action_area[1][2] - 3)
+            z = random.randint(10, self.action_area[1][2] - 3)
             # x = 90
             # y = 90
             # z = 20
@@ -143,11 +143,12 @@ class Environment:
                 break
         """随机生成无人机的初始位置"""
         for uav_num in range(self.num_uavs):
+            too_many_mun = 0  # 为了防止陷入死循环，标志位
             while True:
                 # 生成初始坐标
                 x = random.randint(15, 30)
                 y = random.randint(10, 90)
-                z = random.randint(4, 7)
+                z = random.randint(6, 8)
                 # x = 10
                 # y = 50
                 # z = 5
@@ -155,6 +156,10 @@ class Environment:
                 in_build = 0
                 # 判断无人机和目标点连线上是否有障碍物的标志位
                 # 在等级4后应该有，以增加环境的复杂性
+                complex_flag = 0
+                if self.level <= 3:
+                    # 环境难度等级小于3的时候，没有必要这么复杂
+                    complex_flag = 1
                 # 确保没有生成在障碍物的区域
                 for building in self.bds:
                     if (building.left_down[0] - 2 <= x <= building.right_up[0] + 2
@@ -163,10 +168,36 @@ class Environment:
                         in_build = 1
                         break
                 if in_build == 0:
-                    uav = UAV.UAV(x, y, z, self.agent_r, self)
-                    uav.num = uav_num + 1
-                    self.uavs.append(uav)
-                    break
+                    # 判断无人机和目标点连线上是否有障碍物
+                    uav_local = np.array([x, y, z])
+                    tar_local = np.array([self.target.x, self.target.y, self.target.z])
+                    # 计算两个点之间的向量
+                    vector = tar_local - uav_local
+                    # 计算两个点之间的距离
+                    distance = np.linalg.norm(vector)
+                    # 将向量标准化为单位向量
+                    normed_vector = vector / distance
+                    # 取100个点，离散化目标点和无人机之间的距离
+                    mini_distance = distance / 100.0
+                    for i in range(100):
+                        if i == 98:
+                            too_many_mun += 1
+                        if too_many_mun >= 1000:
+                            # 防止陷入死循环
+                            complex_flag = 1
+                        vector_pd = normed_vector * (i * mini_distance) + uav_local
+                        for building in self.bds:
+                            if (building.left_down[0] <= vector_pd[0] <= building.right_up[0]
+                                    and building.left_down[1] <= vector_pd[1] <= building.right_up[1]
+                                    and building.left_down[2] <= vector_pd[2] <= building.right_up[2]):
+                                # 如果无人机和目标点之间有障碍物，则将complex_flag设为1
+                                complex_flag = 1
+                    if complex_flag == 1:
+                        # 全部条件都满足，uav列表增加
+                        uav = UAV.UAV(x, y, z, self.agent_r, self)
+                        uav.num = uav_num + 1
+                        self.uavs.append(uav)
+                        break
         # 更新无人机状态 np.vstack: 按照行方向堆叠数组  uav.state()是长度为140的列表，代表了各种状态
         self.state = np.vstack([uav.state() for (_, uav) in enumerate(self.uavs)])
         return self.state

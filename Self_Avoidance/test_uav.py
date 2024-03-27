@@ -13,6 +13,8 @@ matplotlib.use('TkAgg')  # 或者其他后端
 
 # 选择模型
 test_model = 'DDPG'
+txt_name = 'all_bn.txt'
+# txt_name = 'bn.txt'
 # 策略网络学习率
 actor_lr = 1e-3
 # 价值网络学习率
@@ -20,7 +22,7 @@ critic_lr = 1e-3
 # 迭代次数
 num_episodes = 50000
 # 隐藏节点，先暂定64，后续可以看看效果
-hidden_dim = 32
+hidden_dim = 64
 # 折扣因子
 gamma = 0.99
 # 软更新参数
@@ -34,7 +36,7 @@ minimal_size = batch_size
 # 高斯噪声标准差
 sigma = 0.01
 # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
-state_dim = 63
+state_dim = 17
 # 暂定直接控制智能体的位移，所以是三维的
 action_dim = 3
 # 每一次迭代中，无人机的数量
@@ -63,7 +65,7 @@ wd = 0.0
 
 if __name__ == '__main__':
     if test_model == 'DDPG':
-        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, batch_size, False,
+        agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, wd, device)
         pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
                     'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
@@ -84,7 +86,7 @@ if __name__ == '__main__':
         # 装载模型参数
         agent.net_dict[name].load_state_dict(check_point['model'])
     # 真实场景运行
-    env.level = 0  # 环境难度等级
+    env.level = 7  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
     # agent.actor.eval()
@@ -104,11 +106,17 @@ if __name__ == '__main__':
             # 更新agent中的步数
             agent.step = env.uavs[0].step
             state = torch.tensor([state[0]], dtype=torch.float).to(device)
-            bn_s = np.loadtxt('bn.txt', delimiter=',')
+            bn_s = np.loadtxt(txt_name, delimiter=',')
             bn_s = torch.tensor(bn_s, dtype=torch.float).to(device)
             state_input = torch.cat((state, bn_s[1:, :]), 0)
             # 增加一个维度
             action = agent.take_action(state_input)[0]
+            # action0, _ = agent.separate(state_input)
+            # action = action0[0].detach().cpu().numpy()
+            print("=" * 100)
+            print("state[:11]:{}".format(state[0][:11]))
+            print("state[11:]:{}".format(state[0][11:]))
+            print("action:{}".format(action))
             # 根据选取的动作改变状态，获取收益
             next_state, reward, uav_done, info = env.step(action, 0)
             # 求总收益
@@ -118,9 +126,7 @@ if __name__ == '__main__':
             else:
                 print("通过贪心策略计算")
             print(env.uavs[0].x, env.uavs[0].y, env.uavs[0].z)
-            print(action)
             print(reward)
-            print("=" * 100)
             env.render()
             plt.pause(0.01)
             if uav_done:
