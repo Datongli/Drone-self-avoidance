@@ -92,7 +92,7 @@ class Environment:
             # 建筑物y方向宽度的一半
             width = random.uniform(1, 5)
             # 建筑物高度
-            height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 5)
+            height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 3)
             # x = 50
             # y = 50
             # length = 30
@@ -125,7 +125,7 @@ class Environment:
             # 生成目标点位
             x = random.randint(60, 90)
             y = random.randint(10, 90)
-            z = random.randint(10, self.action_area[1][2] - 3)
+            z = random.randint(10, self.action_area[1][2] - 5)
             # x = 90
             # y = 90
             # z = 20
