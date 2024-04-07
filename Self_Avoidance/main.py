@@ -19,7 +19,7 @@ mpl.rcParams["axes.unicode_minus"] = False
 
 if __name__ == '__main__':
     # 是否不加载权重，重新开始训练
-    retrain = True
+    retrain = False
     # 选择训练模型是DDPG还是SAC
     train_model = 'DDPG'
     # 策略网络学习率
@@ -36,6 +36,8 @@ if __name__ == '__main__':
     gamma = 0.99
     # 软更新参数 原来为0.005
     tau = 0.05
+    # 初始化环境难度的等级
+    level = 9
     # 每一批次选取的经验数量
     batch_size = 128
     # 经验回放池大小
@@ -45,7 +47,7 @@ if __name__ == '__main__':
     # 高斯噪声标准差
     sigma = 0.01
     # 状态纬度，目前是无人机三维坐标，三维坐标变化量，目标点三维坐标
-    num_in_actor = 17
+    num_in_actor = 21
     # 最大贪心次数，为0是直接根据Q值来选取的动作
     # 想要提升模型的性能，最好把训练的侧重点放在模型上
     max_eps_episode = 0
@@ -74,8 +76,11 @@ if __name__ == '__main__':
 
     # 实例化交互环境
     env = environment.Environment(agent_r, action_area, num_uavs, v0)
+    env.level = level
     # 实例化经验回放池
     replay_buffer = tools.ReplayBuffer(buffer_size)
+    # 保留选取的地址
+    bn_txt = r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\all_bn.txt'
 
     # 实例化智能体对象，可以选择使用的训练模型
     if train_model == 'DDPG':
@@ -105,7 +110,7 @@ if __name__ == '__main__':
                     'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
     # 得到返回的奖励列表
     return_list = tools.train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
-                                               train_model, actor_pth_load, device)
+                                               train_model, actor_pth_load, bn_txt, device)
 
     # 绘图
     episodes_list = list(range(len(return_list)))

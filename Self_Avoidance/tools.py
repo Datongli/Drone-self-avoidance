@@ -101,7 +101,7 @@ def epsilon_annealing(i_epsiode, max_episode, min_eps: float):
 
 
 def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size, batch_size, pth_load, retrain,
-                           train_model, actor_pth_load, device):
+                           train_model, actor_pth_load, bn_txt, device):
     """
     用于离线策略的训练函数
     :param env:可以交互的环境实例
@@ -114,6 +114,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
     :param retrain: 是否重新开始训练
     :param train_model:训练的模型是什么
     :param actor_pth_load: 存放只寻迹或者只避障的actor网络的pth文件
+    :param bn_txt: 存放bn的txt文件
     :param device: 设备
     :return:训练的结果
     """
@@ -165,12 +166,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 # 得到状态的初始值，类型是np.ndarray
                 # 环境重置 state是以无人机数目为行数，140为列数的列表
                 state = env.reset()
-                # # 检查模型的参数
-                # print("*" * 100)
-                # for name, pth in actor_pth_load.items():
-                #     # 打印每一个模型
-                #     for model_name, param in agent.actor_dict[name].named_parameters():
-                #         print("name:{}, param:{}".format(model_name, param))
                 while True:
                     # 对于每个无人机对象来说
                     for i in range(len(env.uavs)):
@@ -181,21 +176,11 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         env.uavs[i].num = num
                         # 更新步数，用于贪心策略的计算
                         agent.step = env.uavs[i].step
-                        """尝试添加bn之后，更改状态输入"""
-                        if replay_buffer.size() >= minimal_size:
-                            agent.actor.train()
-                            bn_s, _, _, _, _ = replay_buffer.sample(batch_size)
-                            # 增加成二维的数组方便整合
-                            state_alone = np.array([state[i]])
-                            # 整合单独的状态和经验回放池中抽取的状态，用于应用
-                            state_input = np.vstack((state_alone, bn_s[: -1]))
-                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
-                        else:
-                            agent.actor.eval()
-                            state_input = state[i]
-                            state_input = torch.tensor(state_input, dtype=torch.float).to(device)
-                            # # 增加一个维度
-                            state_input = torch.unsqueeze(state_input, dim=0)
+                        state_input = state[i]
+                        state_input = torch.tensor(state_input, dtype=torch.float).to(device)
+                        # # 增加一个维度
+                        state_input = torch.unsqueeze(state_input, dim=0)
+                        state_input = torch.unsqueeze(state_input, dim=0)
                         """继续训练"""
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
@@ -207,11 +192,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         env.uavs[i].total_reward += reward
                         env.uavs[i].action.append(action)
                         episode_return += reward  # 求总收益
-                        # print("state[i]:{}".format(state[i]))
-                        # print("action:{}".format(action))
-                        # print("reward:{}".format(reward))
-                        # print("next_state:{}".format(next_state))
-                        # print("uav_done:{}".format(uav_done))
                         """经验回放池出现了问题，检查发现里面有大量重复的数据，并且基本都是相撞、或是相撞之前的，没有飞行时候的"""
                         """找到问题了"""
                         # 将状态、动作、奖励、下一状态、是否结束 打包放入经验回放池
@@ -261,13 +241,6 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     """打印模型的参数"""
                 # 打印每一个无人机的奖励，看看
                 for uav in env.uavs:
-                    # print("reward:{}".format(uav.reward))
-                    #     print("r_climb:{}".format(uav.r_climb))
-                    #     print("r_target:{}".format(uav.r_target))
-                    #     print("r_e:{}".format(uav.r_e))
-                    #     print("c_p_crash:{}".format(uav.c_p_crash))
-                    #     print("action:{}".format(uav.action))
-                    #     print("r_n_distance:{}".format(uav.r_n_distance))
                     print("total_reward:{}".format(uav.total_reward))
                     # 不看撞毁的
                     # if uav.info == 2:
@@ -299,7 +272,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 if (i_episode + 1) % 10 == 0:
                     """保存一次的bn，用于验证"""
                     # 使用逗号作为分隔符，格式为浮点数
-                    np.savetxt('all_bn.txt', bn_s, fmt='%f', delimiter=',')
+                    # np.savetxt('all_bn.txt', bn_s, fmt='%f', delimiter=',')
                     # 保存批量状态，用于验证
                     # 每10周期保存一次网络参数
                     if train_model == 'DDPG':

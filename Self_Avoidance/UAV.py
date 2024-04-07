@@ -114,6 +114,12 @@ class UAV:
         else:
             # 其他传感器直接计算球心到最近点的距离
             distance = np.linalg.norm(sphere_center - closest_point)
+            # 在同一层的四个传感器，如果在距离内就直接置0，反之为1
+            if distance <= sphere_radius + 0.5:
+                # 现在假设传感器的探测范围是0.8，防止无人机运行一步直接进入障碍物
+                distance = 0
+            else:
+                distance = 1000
         # 增加一个如果传感器已经在建筑物里的
         if np.array_equal(sphere_center, closest_point):
             distance = 0
@@ -205,7 +211,8 @@ class UAV:
                         zero_num += 1
                     if k == 0:
                         zero_num += 1
-                    if zero_num != 2:
+                    if zero_num != 2 and k != 0:
+                        # 将上下左右前后、中间层的四个角保留，其他跳过
                         continue
                     # 将无人机原点扣掉
                     if i == 0 and j == 0 and k == 0:
@@ -227,6 +234,10 @@ class UAV:
                         if build_distance <= nearest_distance:
                             # 更新最近距离
                             nearest_distance = build_distance
+                    if zero_num != 2:
+                        state_grid.append(nearest_distance)
+                        # 将同一层的四个角上的传感器直接跳过，它们不需要探测到边界的范围
+                        continue
                     # 计算与边界的最近距离
                     limit_distance = self.col_limit_distance(np.array([self.x + i, self.y + j, self.z + k]), i=i, j=j, k=k)
                     # if (True in collision_list) or limit_distance == 0:
@@ -331,10 +342,10 @@ class UAV:
             r_target = 10 * self.d_origin
         """计算总奖励r"""
         # 爬升奖励+目标奖励+能耗奖励-坠毁系数*坠毁概率
-        # reword = (r_climb + r_target + r_e - crash * self.p_crash + r_n_distance) * 1e-1
-        reword = 0.1 * (Ddistance - (abs(dx) + abs(dy) + abs(dz))) + 0.01 * self.nearest_distance
-        # print("没有经过加减的reward:{}".format(reword))
-        # reword = r_climb + r_target + r_e - crash * self.p_crash
+        # reward = (r_climb + r_target + r_e - crash * self.p_crash + r_n_distance) * 1e-1
+        reward = 5 * (Ddistance - (abs(dx) + abs(dy) + abs(dz))) + 0.1 * self.nearest_distance
+        # print("没有经过加减的reward:{}".format(reward))
+        # reward = r_climb + r_target + r_e - crash * self.p_crash
         self.r_climb.append(r_climb)
         self.r_target.append(r_target)
         self.r_e.append(r_e)
@@ -342,11 +353,11 @@ class UAV:
         self.r_n_distance.append(r_n_distance)
         self.now_state.append([self.x, self.y, self.z])
         # print(self.p_crash)
-        # print("reword:{}".format(reword))
+        # print("reward:{}".format(reward))
         """终止状态判断"""
         # 如果无人机动作幅度过小，给予大量惩罚，但是可以继续运行
         if math.sqrt(dx ** 2 + dy ** 2 + dz ** 2) <= 0.1:
-            reword -= 1
+            reward -= 10
             done = False
             info = 4
         if (self.x <= 1 or self.x >= self.env.action_area[1][0] - 1
@@ -356,34 +367,34 @@ class UAV:
             # 发生碰撞，产生巨大惩罚
             # 根据碰撞点距离目标的远近来设置奖励的大小
             if self.distance <= 10:
-                reword -= 10
+                reward -= 100
                 done = True
                 info = 2
             else:
-                reword -= 20
+                reward -= 200
                 done = True
                 info = 2
         if self.distance <= 2:
             # 到达目标点，给予大量奖励
-            reword += 20
+            reward += 200
             done = True
             info = 1
         # 注意平衡探索步长和碰撞的关系
         if self.step >= 6 * self.d_origin + 6 * self.env.action_area[1][2]:
             # 步数超过最差步长（2*初始距离+2*空间高度），给予惩罚
-            reword -= 5
+            reward -= 50
             done = True
             info = 5
         if self.cost > self.bt:
             # 电量耗尽，给予大量惩罚
-            reword -= 5
+            reward -= 50
             done = True
             info = 3
         """更新无人机的坐标值"""
         self.x += dx
         self.y += dy
         self.z += dz
-        return reword, done, info
+        return reward, done, info
 
 
 if __name__ == '__main__':

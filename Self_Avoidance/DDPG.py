@@ -18,7 +18,7 @@ class LayerFC_actor_tracing(torch.nn.Module):
         self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.fc5 = torch.nn.Linear(hidden_dim, num_out)
         self.dropout = torch.nn.Dropout(p=0.1)
-        self.bn = nn.BatchNorm1d(hidden_dim)
+        # self.bn = nn.BatchNorm1d(hidden_dim)
         self.activation = activation
         self.out_fn = out_fn
 
@@ -49,11 +49,23 @@ class LayerFC_actor_avoid(torch.nn.Module):
     """用于避障部分的actor网络"""
     def __init__(self, num_in, num_out, hidden_dim=64, activation=F.relu, out_fn=lambda x: x):
         super(LayerFC_actor_avoid, self).__init__()
-        self.fc1 = torch.nn.Linear(num_in, hidden_dim)
-        self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.fc5 = torch.nn.Linear(hidden_dim, num_out)
+        # self.fc1 = torch.nn.Linear(num_in, hidden_dim)
+        # self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
+        # self.fc3 = torch.nn.Linear(hidden_dim, hidden_dim)
+        # self.fc4 = torch.nn.Linear(hidden_dim, hidden_dim)
+        # self.fc5 = torch.nn.Linear(hidden_dim, num_out)
+        self.conv1 = torch.nn.Conv1d(1, 16, 3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm1d(16)
+        self.conv2 = torch.nn.Conv1d(16, 32, 3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm1d(32)
+        self.conv3 = torch.nn.Conv1d(32, 64, 3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm1d(64)
+        self.conv4 = torch.nn.Conv1d(64, 32, 3, stride=1, padding=1)
+        self.bn4 = nn.BatchNorm1d(32)
+        self.conv5 = torch.nn.Conv1d(32, 16, 3, stride=1, padding=1)
+        self.bn5 = nn.BatchNorm1d(16)
+        self.conv6 = torch.nn.Conv1d(16, 1, 3, stride=1, padding=1)
+        self.fc6 = torch.nn.Linear(10, num_out)
         self.dropout = torch.nn.Dropout(p=0.1)
         self.bn = nn.BatchNorm1d(hidden_dim)
         self.activation = activation
@@ -61,23 +73,24 @@ class LayerFC_actor_avoid(torch.nn.Module):
 
     def forward(self, x):
         """前向传播函数"""
-        x = self.fc1(x)
-        # x = self.bn(x)
+        # print("x.shape:{}".format(x.shape))
+        x = self.conv1(x)
+        # x = self.bn1(x)
         x = self.activation(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        # x = self.bn(x)
+        x = self.conv2(x)
+        # x = self.bn2(x)
         x = self.activation(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
-        # x = self.bn(x)
+        x = self.conv3(x)
+        # x = self.bn3(x)
         x = self.activation(x)
-        x = self.dropout(x)
-        x = self.fc4(x)
-        # x = self.bn(x)
+        x = self.conv4(x)
+        # x = self.bn4(x)
         x = self.activation(x)
-        x = self.dropout(x)
-        x = self.fc5(x)
+        x = self.conv5(x)
+        # x = self.bn5(x)
+        x = self.activation(x)
+        x = self.conv6(x)
+        x = self.fc6(x)
         x = self.out_fn(x)
         return x
 
@@ -109,19 +122,19 @@ class LayerFC_actor(torch.nn.Module):
         self.actor_avoid = LayerFC_actor_avoid(6, num_out, 32, activation=activation, out_fn=out_fn)
         # 其他部分
         self.dropout = torch.nn.Dropout(p=0.1)
-        self.bn = nn.BatchNorm1d(hidden_dim)
+        # self.bn = nn.BatchNorm1d(hidden_dim)
         self.activation = activation
         self.out_fn = out_fn
 
     def forward(self, x):
-        x1 = x[:, 3:6]
-        x2 = x[:, 11:]
+        x1 = x[:, :, 3:6]
+        x2 = x[:, :, 11:]
         # """计算只寻迹的动作"""
         x1 = self.actor_tracing(x1)
         # """计算只避障的动作"""
         x2 = self.actor_avoid(x2)
         # """合并"""
-        x_all = torch.cat((x1, x2), dim=1)
+        x_all = torch.cat((x1, x2), dim=2)
         x = self.fc1(x_all)
         # x = self.bn(x)
         x = self.activation(x)
@@ -168,7 +181,7 @@ class LayerFC_critic(torch.nn.Module):
         self.mean = nn.Parameter(torch.zeros((num_in,)), requires_grad=True)
         self.std = nn.Parameter(torch.ones((num_in,)), requires_grad=True)
         self.dropout = torch.nn.Dropout(p=0.1)
-        self.bn = nn.BatchNorm1d(hidden_dim)
+        # self.bn = nn.BatchNorm1d(hidden_dim)
         # self.init_weights()
 
     def init_weights(self):
@@ -188,19 +201,19 @@ class LayerFC_critic(torch.nn.Module):
 
     def forward(self, x):
         x = self.fc1(x)
-        x = self.bn(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.dropout(x)
         x = self.fc2(x)
-        x = self.bn(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.dropout(x)
         x = self.fc3(x)
-        x = self.bn(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.dropout(x)
         x = self.fc4(x)
-        x = self.bn(x)
+        # x = self.bn(x)
         x = self.activation(x)
         x = self.dropout(x)
         x = self.fc5(x)
@@ -408,19 +421,37 @@ class DDPG:
         avoid_action = [0, 0, 0]
         direction = min_num
         if direction == 0:  # 左
-            avoid_action = [2, 0, 0]
+            avoid_action = [self.action_bound, 0, 0]
         if direction == 1:  # 后
-            avoid_action = [0, 2, 0]
+            avoid_action = [0, self.action_bound, 0]
         if direction == 2:  # 下
-            avoid_action = [0, 0, 2]
+            avoid_action = [0, 0, self.action_bound]
         if direction == 3:  # 上
-            avoid_action = [0, 0, -2]
+            avoid_action = [0, 0, -self.action_bound]
         if direction == 4:  # 前
-            avoid_action = [0, -2, 0]
+            avoid_action = [0, -self.action_bound, 0]
         if direction == 5:  # 右
-            avoid_action = [-2, 0, 0]
+            avoid_action = [-self.action_bound, 0, 0]
         avoid_action = np.array(avoid_action)
         return avoid_action
+
+    def diagonal_action(self, min_num):
+        """
+        对角线传感器动作函数
+        :param min_num: 中间层传感器是谁感受到了障碍物
+        :return: 相应的动作
+        """
+        diag_action = [0, 0, 0]
+        if min_num == 0:  # 左下
+            diag_action = [self.action_bound, self.action_bound, 0]
+        if min_num == 1:  # 左上
+            diag_action = [self.action_bound, -self.action_bound, 0]
+        if min_num == 2:  # 右下
+            diag_action = [-self.action_bound, self.action_bound, 0]
+        if min_num == 3:  # 右上
+            diag_action = [-self.action_bound, -self.action_bound, 0]
+        diag_action = np.array(diag_action)
+        return diag_action
 
     def separate(self, states):
         """
@@ -432,22 +463,38 @@ class DDPG:
         avoid_num_list = []
         for num, state in enumerate(states):
             # 得到传感器中的最小值
-            sensor_point = [state[11].cpu(), state[12].cpu(), state[13].cpu(), state[14].cpu(), state[15].cpu(), state[16].cpu()]
+            state = state[0]
+            sensor_point = [state[12].cpu(), state[14].cpu(), state[15].cpu(), state[16].cpu(), state[17].cpu(), state[19].cpu()]
             sensor_point = np.array(sensor_point)
             min_distance = np.min(sensor_point)
             min_num = np.argmin(sensor_point)
-            if min_distance >= 3:
-                # 如果最近的障碍物距离大于3，就直接选择寻迹的动作
-                best_action_list.append(self.straight_action(state))
-            elif min_distance >= 1.5:
-                best_action_list.append(self.parallel_action(state, min_num))
-                # 记录标号，后续程序中计算loss使用
+            diagonal_near = False
+            # 得到同一层中对角线最小值
+            diagonal_point = [state[11].cpu(), state[13].cpu(), state[18].cpu(), state[20].cpu()]
+            diagonal_point = np.array(diagonal_point)
+            if 0 in diagonal_point:
+                # 如果有对角线的传感器报警
+                diagonal_near = True
+            diagonal_min = np.argmin(diagonal_point)
+            if diagonal_near and min_distance > 1.5:
+                # 如果有对角线的传感器报警
+                best_action_list.append(self.diagonal_action(diagonal_min))
                 avoid_num_list.append(num)
             else:
-                # 如果最近的障碍物距离小于2，就选择避障的动作
-                best_action_list.append(self.avoidance_action(min_num))
-                # 记录标号，后续程序中计算loss使用
-                avoid_num_list.append(num)
+                # 如果没有对角线的传感器报警，执行寻迹、避障、平飞等任务
+                if min_distance >= 4:
+                    # 如果最近的障碍物距离大于3，就直接选择寻迹的动作
+                    best_action_list.append(self.straight_action(state))
+                elif min_distance >= 1.5:
+                    best_action_list.append(self.parallel_action(state, min_num))
+                    # 记录标号，后续程序中计算loss使用
+                    avoid_num_list.append(num)
+                else:
+                    # 如果最近的障碍物距离小于1.5，就选择避障的动作
+                    best_action_list.append(self.avoidance_action(min_num))
+                    # 记录标号，后续程序中计算loss使用
+                    avoid_num_list.append(num)
+        best_action_list = np.array(best_action_list)
         best_action_list = torch.tensor(best_action_list, dtype=torch.float).to(self.device)
         return best_action_list, avoid_num_list
 
@@ -479,17 +526,21 @@ class DDPG:
         rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(self.device)
         next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
+        states = torch.unsqueeze(states, dim=1)
+        next_states = torch.unsqueeze(next_states, dim=1)
         print("states:{}".format(states[:5]))
         print("actions:{}".format(actions[:5]))
         # 计算并更新网络
-        next_q_values = self.target_critic(torch.cat([next_states, self.target_actor(next_states)], dim=1))
+        next_q_values = self.target_critic(torch.cat([next_states, self.target_actor(next_states)], dim=2))
+        next_q_values = next_q_values.squeeze(dim=1)
         q_targets = rewards + self.gamma * next_q_values * (1 - dones)
+        q_targets = torch.unsqueeze(q_targets, dim=1)
         print("next_q_value:{}".format(next_q_values[:10]))
         print("reward:{}".format(rewards[:10]))
         print("q_targets:{}".format(q_targets[:10]))
         # 计算并更新价值网络的损失
-        critic_loss = torch.mean(F.mse_loss(self.critic(torch.cat([states, actions], dim=1)), q_targets))
-        print("self.critic(torch.cat([states, actions], dim=1)):{}".format(self.critic(torch.cat([states, actions], dim=1))[:10]))
+        critic_loss = torch.mean(F.mse_loss(self.critic(torch.cat([states, actions], dim=2)), q_targets))
+        print("self.critic(torch.cat([states, actions], dim=1)):{}".format(self.critic(torch.cat([states, actions], dim=2))[:10]))
         print("critic_loss:{}".format(critic_loss))
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -500,7 +551,7 @@ class DDPG:
         self.critic_optimizer.step()
         # 见笔记上的注释
         # 计算并更新策略网络的损失
-        actor_loss_q = - torch.mean(self.critic(torch.cat([states, self.actor(states)], dim=1)))  # 策略网络为了使得Q值最大化
+        actor_loss_q = - torch.mean(self.critic(torch.cat([states, self.actor(states)], dim=2)))  # 策略网络为了使得Q值最大化
         actor_loss_q = abs(actor_loss_q)
         """只寻迹的actor_loss的计算方式"""
         # st_action = self.straight_action(states)
@@ -515,11 +566,14 @@ class DDPG:
         # 将最佳动作和无人机动作中的寻迹和避障分隔开
         best_action_trac, best_action_avoid = self.section(best_action, avoid_num_list)
         uav_action_trac, uav_action_avoid = self.section(uav_action, avoid_num_list)
+        # 移除维度1以便计算loss
+        uav_action_trac = uav_action_trac.squeeze(dim=1)
+        uav_action_avoid = uav_action_avoid.squeeze(dim=1)
         # 寻迹和避障的loss分开来
         trac_loss = torch.mean(F.mse_loss(uav_action_trac, best_action_trac))
         avoid_loss = torch.mean(F.mse_loss(uav_action_avoid, best_action_avoid))
         # 硬加权后合并
-        actor_loss = 1 * trac_loss + 3 * avoid_loss + 2 * actor_loss_q
+        actor_loss = 1 * trac_loss + 10 * avoid_loss + 0.1 * actor_loss_q
         """actor_loss进行反向传播"""
         print("actor_loss:{}".format(actor_loss))
         self.actor_optimizer.zero_grad()

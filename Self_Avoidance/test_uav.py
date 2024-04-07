@@ -13,8 +13,6 @@ matplotlib.use('TkAgg')  # 或者其他后端
 
 # 选择模型
 test_model = 'DDPG'
-txt_name = 'all_bn.txt'
-# txt_name = 'bn.txt'
 # 策略网络学习率
 actor_lr = 1e-3
 # 价值网络学习率
@@ -36,7 +34,7 @@ minimal_size = batch_size
 # 高斯噪声标准差
 sigma = 0.01
 # 三维环境下动作，加上一堆状态的感知，目前是124+16=140个
-state_dim = 17
+state_dim = 21
 # 暂定直接控制智能体的位移，所以是三维的
 action_dim = 3
 # 每一次迭代中，无人机的数量
@@ -86,7 +84,7 @@ if __name__ == '__main__':
         # 装载模型参数
         agent.net_dict[name].load_state_dict(check_point['model'])
     # 真实场景运行
-    env.level = 7  # 环境难度等级
+    env.level = 10  # 环境难度等级
     env.num_uavs = 1  # 测试的时候只需要一个无人机就可以
     state = env.reset()  # 环境重置
     # agent.actor.eval()
@@ -106,12 +104,10 @@ if __name__ == '__main__':
             # 更新agent中的步数
             agent.step = env.uavs[0].step
             state = torch.tensor([state[0]], dtype=torch.float).to(device)
-            bn_s = np.loadtxt(txt_name, delimiter=',')
-            bn_s = torch.tensor(bn_s, dtype=torch.float).to(device)
-            state_input = torch.cat((state, bn_s[1:, :]), 0)
             # 增加一个维度
-            action = agent.take_action(state_input)[0]
-            # action0, _ = agent.separate(state_input)
+            state = torch.unsqueeze(state, dim=0)
+            action = agent.take_action(state)[0]
+            # action0, _ = agent.separate(state)
             # action = action0[0].detach().cpu().numpy()
             print("=" * 100)
             print("state[:11]:{}".format(state[0][:11]))

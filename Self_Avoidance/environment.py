@@ -84,7 +84,7 @@ class Environment:
             if len(self.bds) >= building_num:
                 break
             # 建筑物中心的x坐标
-            x = random.uniform(10, self.action_area[1][0] - 10)
+            x = random.uniform(20, self.action_area[1][0] - 10)
             # 建筑物中心的y坐标
             y = random.uniform(10, self.action_area[1][1] - 10)
             # 建筑物x方向长度的一半
@@ -146,7 +146,7 @@ class Environment:
             too_many_mun = 0  # 为了防止陷入死循环，标志位
             while True:
                 # 生成初始坐标
-                x = random.randint(15, 30)
+                x = random.randint(10, 15)
                 y = random.randint(10, 90)
                 z = random.randint(6, 8)
                 # x = 10
@@ -157,7 +157,7 @@ class Environment:
                 # 判断无人机和目标点连线上是否有障碍物的标志位
                 # 在等级4后应该有，以增加环境的复杂性
                 complex_flag = 0
-                if self.level <= 3:
+                if self.level <= 0:
                     # 环境难度等级小于3的时候，没有必要这么复杂
                     complex_flag = 1
                 # 确保没有生成在障碍物的区域
@@ -210,7 +210,7 @@ class Environment:
         :return: 下一个状态，奖励，是否结束，用于调试的额外信息等
         """
         # 无人机执行行为,info为是否到达目标点
-        reward, done, info = self.uavs[i].update(action)
+        reward, done, info = self.uavs[i].update(action[0])
         next_state = self.uavs[i].state()
         return next_state, reward, done, info
 
