@@ -377,7 +377,7 @@ class UavAvoidEnv(gym.Env):
             self.render(1)  # 由于是第一次渲染，故需要渲染建筑物
         return np.array(self.state, dtype=np.float32), {}
 
-    def step(self, u) -> tuple[list, int | float | Any, bool, dict[str, int]]:
+    def step(self, u) -> tuple[list, int | float | Any, bool, bool, dict[str, int]]:
         """
         时间步函数，用于更新无人机的state
         :param u:无人机采取的动作和编号组成的元组
@@ -448,7 +448,7 @@ class UavAvoidEnv(gym.Env):
         if self.render_mode == 'human':
             self.render()
         Info = {"info": info}
-        return next_state, reward, done, Info
+        return np.array(next_state, dtype=np.float32), reward, done, False, Info
 
     def render(self, flag: int = 0) -> None:
         """
