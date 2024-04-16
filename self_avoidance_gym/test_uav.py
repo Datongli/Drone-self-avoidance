@@ -119,7 +119,7 @@ if __name__ == '__main__':
             print("state[11:]:{}".format(state[0][0][11:]))
             print("action:{}".format(action))
             # 根据选取的动作改变状态，获取收益
-            next_state, reward, uav_done, info = env.step((action[0], 0))
+            next_state, reward, uav_done, _, info = env.step((action[0], 0))
             # 求总收益
             total_reward += reward
             if agent.action_flag:

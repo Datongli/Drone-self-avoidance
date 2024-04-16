@@ -165,14 +165,14 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                 state, _ = env.reset()
                 while True:
                     # 对于每个无人机对象来说
-                    for i in range(len(env.uavs)):
-                        if env.uavs[i].done:
+                    for i in range(len(env.unwrapped.uavs)):
+                        if env.unwrapped.uavs[i].done:
                             # 无人机已结束任务，跳过
                             continue
                         num += 1
-                        env.uavs[i].num = num
+                        env.unwrapped.uavs[i].num = num
                         # 更新步数，用于贪心策略的计算
-                        agent.step = env.uavs[i].step
+                        agent.step = env.unwrapped.uavs[i].step
                         state_input = state[i]
                         state_input = torch.tensor(state_input, dtype=torch.float).to(device)
                         # # 增加一个维度
@@ -182,13 +182,13 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         # 选择动作，类型为np.ndarray
                         action = agent.take_action(state_input)[0]
                         # 得到下一个状态，奖励，是否完成，状态的类别（电量耗尽，坠机，到达目标点位等等）
-                        next_state, reward, uav_done, Info = env.step((action[0], i))  # 根据选取的动作改变状态，获取收益
+                        next_state, reward, uav_done, _, Info = env.step((action[0], i))  # 根据选取的动作改变状态，获取收益
                         info = Info["info"]
-                        env.uavs[i].info = info
+                        env.unwrapped.uavs[i].info = info
                         # 将环境给出的奖励放到无人机对象的奖励记录中，用于检查每一步的好坏
-                        env.uavs[i].reward.append(reward)
-                        env.uavs[i].total_reward += reward
-                        env.uavs[i].action.append(action)
+                        env.unwrapped.uavs[i].reward.append(reward)
+                        env.unwrapped.uavs[i].total_reward += reward
+                        env.unwrapped.uavs[i].action.append(action)
                         episode_return += reward  # 求总收益
                         """经验回放池出现了问题，检查发现里面有大量重复的数据，并且基本都是相撞、或是相撞之前的，没有飞行时候的"""
                         """找到问题了"""
@@ -210,14 +210,14 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         """如果是结束状态"""
                         if uav_done:
                             # 更新无人机的状态
-                            env.uavs[i].done = True
+                            env.unwrapped.uavs[i].done = True
                             # 完成任务（包括到达目标，电量耗尽，发生碰撞，步长超过最差步等）
                             n_done += 1
                             continue
                         # 状态变更
                         state[i] = np.array(next_state)
                     # 如果一个批次的无人机全都训练完毕
-                    if n_done == env.uavs_num:
+                    if n_done == env.unwrapped.uavs_num:
                         break
                 """每迭代一次，更新网络"""
                 # 如果达到经验回放池的最低要求，同时1次迭代跟新一次参数
@@ -238,7 +238,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                         agent.critic_2_scheduler.step()
                     """打印模型的参数"""
                 # 打印每一个无人机的奖励，看看
-                for uav in env.uavs:
+                for uav in env.unwrapped.uavs:
                     print("total_reward:{}".format(uav.total_reward))
                     # 不看撞毁的
                     # if uav.info == 2:
@@ -247,7 +247,7 @@ def train_off_policy_agent(env, agent, num_episodes, replay_buffer, minimal_size
                     print("action:{}".format(uav.action))
                     #     print("r_n_distance:{}".format(uav.r_n_distance))
                 # 如果有80%的无人机到达了目标区域
-                if success_count >= 0.8 * env.uavs_num and env.level < 10:
+                if success_count >= 0.8 * env.unwrapped.uavs_num and env.level < 10:
                     # 记为一次效果较好的迭代
                     success_list.append(1)
                 else:
