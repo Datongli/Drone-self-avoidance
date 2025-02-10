@@ -1,11 +1,9 @@
 """
 用于进行生成实际环境，并对保存的参数进行测试的文件
 """
-import gymnasium
 import environment_gym
-import torch
-from DDPG import *
 import matplotlib
+from DDPG import *
 from SAC import *
 
 matplotlib.use('TkAgg')  # 或者其他后端
@@ -89,7 +87,7 @@ if __name__ == '__main__':
         # 装载模型参数
         agent.net_dict[name].load_state_dict(check_point['model'])
     # 真实场景运行
-    env.level = 10  # 环境难度等级
+    env.level = 8  # 环境难度等级
     env.uavs_num = 1  # 测试的时候只需要一个无人机就可以
     state, _ = env.reset()  # 环境重置
     # agent.actor.eval()
