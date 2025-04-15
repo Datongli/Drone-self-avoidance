@@ -62,10 +62,10 @@ if __name__ == '__main__':
     if test_model == 'DDPG':
         agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, wd, device)
-        pth_load = {'actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\actor.pth',
-                    'critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic.pth',
-                    'target_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_actor.pth',
-                    'target_critic': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic.pth'}
+        pth_load = {'actor': r'./pth/actor.pth',
+                    'critic': r'./pth/critic.pth',
+                    'target_actor': r'./pth/target_actor.pth',
+                    'target_critic': r'./pth/target_critic.pth'}
     if test_model == 'SAC':
         agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
                               alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, wd, device)
