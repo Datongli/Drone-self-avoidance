@@ -4,7 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import torch.nn.init as init
-from torch.nn.utils.parametrizations import weight_norm
+
 import tools
 
 
