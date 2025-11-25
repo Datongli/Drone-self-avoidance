@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./self_avoidance_gym/environment-gym",
+        "./self_avoidance_gym_refactor/environment-gym-refactor"
+    ]
+}
