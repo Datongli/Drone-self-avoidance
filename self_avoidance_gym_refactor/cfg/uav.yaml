@@ -1,0 +1,12 @@
+uav:
+  uavNums: 10  # 无人机数量
+  radius: 0.2  # 无人机半径
+  sensorType: "2d_lidar"  # 传感器类型
+  power: 5000  # 无人机总电量
+  powerConsumption: 5  # 无人机基础能耗，能耗/步
+  powerCoefficient: 0.2  # 无人机能耗系数
+
+  sensor:
+    numBeams: 512  # 激光雷达波束数量
+    minRange: 0.5  # 激光雷达最小检测距离
+    maxRange: 100.0  # 激光雷达最大检测距离
