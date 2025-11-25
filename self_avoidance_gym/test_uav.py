@@ -62,18 +62,20 @@ if __name__ == '__main__':
     if test_model == 'DDPG':
         agent = DDPG(state_dim, action_dim, state_dim + action_dim, hidden_dim, False,
                      action_bound, sigma, actor_lr, critic_lr, tau, gamma, max_eps_episode, min_eps, wd, device)
-        pth_load = {'actor': r'./pth/actor.pth',
-                    'critic': r'./pth/critic.pth',
-                    'target_actor': r'./pth/target_actor.pth',
-                    'target_critic': r'./pth/target_critic.pth'}
+
+        pth_load = {'actor': r'.\pth\actor.pth',
+                    'critic': r'.\pth\critic.pth',
+                    'target_actor': r'.\pth\target_actor.pth',
+                    'target_critic': r'.\pth\target_critic.pth'}
+
     if test_model == 'SAC':
         agent = SACContinuous(state_dim, hidden_dim, action_dim, action_bound, actor_lr, critic_lr,
                               alpha_lr, target_entropy, tau, gamma, max_eps_episode, min_eps, wd, device)
-        pth_load = {'SAC_actor': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\SAC_actor.pth',
-                    "critic_1": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_1.pth',
-                    "critic_2": r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\critic_2.pth',
-                    'target_critic_1': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_1.pth',
-                    'target_critic_2': r'D:\PythonProject\Drone_self_avoidance\Self_Avoidance\target_critic_2.pth'}
+        pth_load = {'SAC_actor': r'.\pth\SAC_actor.pth',
+                    "critic_1": r'.\pth\critic_1.pth',
+                    "critic_2": r'.\pth\critic_2.pth',
+                    'target_critic_1': r'.\pth\target_critic_1.pth',
+                    'target_critic_2': r'.\pth\target_critic_2.pth'}
     # env = gymnasium.make('environment_gym/UavAvoid-v0',
     #                      agent_r=agent_r,
     #                      action_area=action_area,
