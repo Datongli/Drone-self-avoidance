@@ -129,8 +129,10 @@ class Lidar2D(Sensor):
             ranges[beamIndex] = min(ranges[beamIndex], hitDistance)
         """处理并返回结果"""
         ranges = np.clip(ranges, self.minRange, self.maxRange)
-        self.sensorData = ranges
-        return ranges
+        # 归一化
+        normalizedRanges = (ranges - self.minRange) / (self.maxRange - self.minRange)
+        self.sensorData = normalizedRanges
+        return normalizedRanges
             
     @staticmethod
     def _ray_intersection_distance(pointX: float, pointY: float, dircetionX: float, directionY: float,

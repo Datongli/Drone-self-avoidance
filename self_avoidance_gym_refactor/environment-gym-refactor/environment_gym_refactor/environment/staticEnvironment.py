@@ -54,7 +54,7 @@ class UavAvoidEnv(gym.Env):
         self.uavNums: int = getattr(cfg.uav, "uavNums", 1)  # 无人机数量
         self.uavs: list[UAV] = []  # 无人机列表
         """观测模式"""
-        self.renderMode: str = getattr(cfg, "renderMode", None)  # 渲染模式
+        self.renderMode: str = getattr(cfg, "renderMode", "human")  # 渲染模式
         if self.renderMode == "human":
             self.fig = plt.figure()
             self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
@@ -152,7 +152,7 @@ class UavAvoidEnv(gym.Env):
             uav.done = True
             uav.information = 3
             terminalReward = -getattr(self.cfg.env.reward, "energyOutPenalty", 80.0)
-        elif uav.step >= maxSteps:
+        elif uav.steps >= maxSteps:
             uav.done = True
             uav.information = 5
             terminalReward = -getattr(self.cfg.env.reward, "stepOutPenalty", 50.0)
@@ -163,7 +163,7 @@ class UavAvoidEnv(gym.Env):
         """可视化"""
         if self.renderMode == "human":
             self.render()
-        return nextState, reward, uav.done, False, uav.information
+        return nextState, reward, uav.done, False, {"uavInformation": uav.information}
 
     def render(self, flag: int=0) -> None:
         """
