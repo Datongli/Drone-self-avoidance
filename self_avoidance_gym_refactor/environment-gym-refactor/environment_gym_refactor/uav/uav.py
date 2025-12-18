@@ -8,11 +8,11 @@ import gymnasium as gym
 from gymnasium import spaces
 import math
 import random
-from enum import Enum
+from enum import Enum, IntEnum
 from ..uav.sensor import Sensor, Lidar2D, Lidar3D
 
 
-class UAVInfo(Enum):
+class UAVInfo(IntEnum):
     """无人机状态枚举"""
     SUCCESS = 1  # 成功到达目标点
     COLLISION = 2  # 发生碰撞
@@ -51,6 +51,7 @@ class UAV:
         self.done: bool = False  # 终止标志
         self.reward: int | float = 0  # 无人机获得的奖励
         self.information: int = 4  # 无人机的状态描述代码
+        self.velocity: np.array = np.zeros(3, dtype=np.float32)  # 当前时刻的速度
         # 根据配置创建传感器实例
         sensorFactory = self.SENSOR_REGISTRY.get(getattr(cfg.uav, "sensorType", "2d_lidar"))
         self.sensor: Sensor | None = sensorFactory(cfg) if sensorFactory else None
@@ -65,18 +66,21 @@ class UAV:
         """
         """获取无人机的状态"""
         uavState = []
-        # 无人机自身的三维坐标
-        uavState.append(self.position.x)
-        uavState.append(self.position.y)
-        uavState.append(self.position.z)
         # 无人机与目标点的三维坐标差值
-        uavState.append(env.targets[self.uavID].x - self.position.x)
-        uavState.append(env.targets[self.uavID].y - self.position.y)
-        uavState.append(env.targets[self.uavID].z - self.position.z)
-        # 目标点的三维坐标
-        uavState.append(env.targets[self.uavID].x)
-        uavState.append(env.targets[self.uavID].y)
-        uavState.append(env.targets[self.uavID].z)
+        dx = env.targets[self.uavID].x - self.position.x
+        dy = env.targets[self.uavID].y - self.position.y
+        dz = env.targets[self.uavID].z - self.position.z
+        uavState.append(dx / getattr(self.cfg.env, "length", 100))
+        uavState.append(dy / getattr(self.cfg.env, "width", 100))
+        uavState.append(dz / getattr(self.cfg.env, "height", 25))
+        # 无人机与目标的差值
+        distance = math.sqrt(dx**2 + dy**2 + dz**2)
+        distanceMax = math.sqrt(getattr(self.cfg.env, "length", 100)**2 + getattr(self.cfg.env, "width", 100)**2 + getattr(self.cfg.env, "height", 25)**2)
+        uavState.append(distance / distanceMax)
+        # 无人机当前的三维速度
+        uavState.append(self.velocity[0] / getattr(self.cfg.uav, "actionBound", 2))
+        uavState.append(self.velocity[1] / getattr(self.cfg.uav, "actionBound", 2))
+        uavState.append(self.velocity[2] / getattr(self.cfg.uav, "actionBound", 2))
         uavState = np.array(uavState)
         """获取传感器的状态"""
         sensorState = self.sensor.get_sensor_data(self, env, yaw)
