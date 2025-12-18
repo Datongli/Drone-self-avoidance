@@ -1,0 +1,34 @@
+defaults:
+  - _self_
+  - env
+  - uav
+
+
+mode: "test"  # test模式
+renderMode: "human"  # 渲染模式
+device: "cuda:0"  # 训练设备
+
+# 测试参数
+modelSavePath: "./model"  # 模型保存路径
+actionBound: 2.0  # 动作限制
+navigationModel: "SAC"  # 模型种类
+# navigationModel: "DDPG"
+seed: 0  # 随机种子
+loadModel: "episode_100.pt"  # 加载的模型名称
+testEpisodes: 1  # 测试轮次
+testUavNums: 1  # 测试的无人机数量
+envLevel: 1  # 环境难度等级
+
+# wandb配置
+wandb:
+  enabled: True  # 是否启用wandb
+  project: XTDrone-DRL  # wandb项目名
+  name: navigation-training-gym  # wandb实验名
+  entity: ldt20020517-beihang-university  # wandb实体名
+  mode: online   # wandb模式
+  id: kw9xf9k7  # wandb实验ID
+  dir: wandb  # wandb保存目录
+  resumeFlag: True  # 是否恢复实验
+  checkPointDir: checkPoint  # 模型保存目录
+  checkPointPath: checkPoint/kw9xf9k7.pt  # 模型保存路径
+  saveEvery: 100  # 每训练n轮保存一次模型
