@@ -66,6 +66,7 @@ def main(cfg) -> None:
                 print(f"[ERROR] 恢复检查点失败，将从头开始训练：{e}")
         else: pass
     else: episodeIndex = 0  # 若未启用恢复，重置为0
+    env.unwrapped.level = navigationAlgorithm.difficultyLevel  # 设置环境难度
     # 用于参数变化曲线的记录
     watchRegistered = False  # 是否已注册watch
     totalEpisodes = int(getattr(cfg, "numEpisodes", 5000))  # 训练总轮次
@@ -165,9 +166,14 @@ def main(cfg) -> None:
                                     extraInfo={"wandb_run_id": wandb.run.id if wbEnabled and wandb.run else None})
                     # 上传到wandb
                     upload_wandb(wbEnabled, lastestCheckPointPath, "latest.pt")
+                # 如果升级，保存升级模型
+                if successCount / getattr(cfg.uav, "uavNums") >= getattr(cfg.env, "successRate", 0.8) and env.unwrapped.level < getattr(cfg.env, "maxLevel", 10):
+                    snapshotPath = os.path.join(checkPointDir, f"level_{env.unwrapped.level - 1}.pt")
+                    save_checkPoint(snapshotPath, episodeIndex, navigationAlgorithm)
+                    # 上传到wandb
+                    upload_wandb(wbEnabled, snapshotPath, f"level_{env.unwrapped.level - 1}.pt")
                 """输出信息并保存模型"""
                 # 输出信息
-                # print(f"当前轮次{episodeIndex}，环境难度{env.level}，累计奖励{episodeReturn:.2f}，成功{successCount}，碰撞{collisionCount}，耗尽能量{powerExhaustCount}，超过步长{overCount}")
                 progressBar.set_postfix({"当前轮次": episodeIndex,
                                          "环境难度": env.unwrapped.level, 
                                          "奖励": f"{episodeReturn:.2f}", 

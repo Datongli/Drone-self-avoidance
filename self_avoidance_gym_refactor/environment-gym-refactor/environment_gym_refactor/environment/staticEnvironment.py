@@ -285,7 +285,7 @@ class UavAvoidEnv(gym.Env):
         targetsNumber = self.uavNums
         """循环生成目标点"""
         count = 0  # 防止陷入无限循环
-        while len(self.targets) < targetsNumber and count < 5000:
+        while len(self.targets) < targetsNumber:
             # 构建目标点前期准备
             x = random.uniform(self.length * 0.2, self.length * 0.8)  # 目标点的x坐标
             y = random.uniform(self.width * 0.5, self.width * 0.8)  # 目标点的y坐标
@@ -293,7 +293,11 @@ class UavAvoidEnv(gym.Env):
             # 创建目标点
             generatorTargent = Target(x, y, z)
             # 检查是否与障碍物距离过近
-            if not self._is_target_overlop(generatorTargent):
+            if count < 50000:
+                if not self._is_target_overlop(generatorTargent):
+                    self.targets.append(generatorTargent)
+            else:
+                # 紧急情况，空间太拥挤，强制生成
                 self.targets.append(generatorTargent)
             count += 1
 
@@ -328,7 +332,11 @@ class UavAvoidEnv(gym.Env):
             generatorUav = UAV(self.cfg, len(self.uavs))
             generatorUav.position = Coordinate(x, y, z)
             # 检查是否与障碍物距离过近
-            if not self._is_uav_overlop(generatorUav):
+            if count < 50000:
+                if not self._is_uav_overlop(generatorUav):
+                    self.uavs.append(generatorUav)
+            else:
+                # 紧急情况，空间太拥挤，强制生成
                 self.uavs.append(generatorUav)
             count += 1
 
