@@ -12,14 +12,15 @@ device: "cuda:0"  # 训练设备
 # 训练参数
 modelSavePath: "./model"  # 模型保存路径
 actionBound: 2.0  # 动作限制
-bufferSize: 5000  # 经验回放池容量
-minimalSize: 64  # 经验回放池的最小启用容量
-batchSize: 64  # 批次大小
+bufferSize: 10000  # 经验回放池容量
+minimalSize: 128  # 经验回放池的最小启用容量
+batchSize: 128  # 批次大小
 navigationModel: "SAC"  # 模型种类
 # navigationModel: "DDPG"
 numEpisodes: 10000  # 训练轮次
 seed: 0  # 随机种子
-learningRateAlpha: 0.01  # alpha学习率
+rewardScale: 0.01  # 奖励缩放因子
+learningRateAlpha: 1e-4  # alpha学习率
 learningRateActor: 1e-3  # Actor网络学习率
 learningRateCritic: 1e-3  # Critic网络学习率
 gamma: 0.99 # 折扣因子
@@ -39,7 +40,7 @@ wandb:
   mode: online   # wandb模式
   id: kw9xf9k7  # wandb实验ID
   dir: wandb  # wandb保存目录
-  resumeFlag: True  # 是否恢复实验
+  resumeFlag: False  # 是否恢复实验
   checkPointDir: checkPoint  # 模型保存目录
   checkPointPath: checkPoint/kw9xf9k7.pt  # 模型保存路径
   saveEvery: 1000  # 每训练n轮保存一次模型

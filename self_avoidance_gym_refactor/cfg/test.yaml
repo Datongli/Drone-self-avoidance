@@ -14,7 +14,7 @@ actionBound: 2.0  # 动作限制
 navigationModel: "SAC"  # 模型种类
 # navigationModel: "DDPG"
 seed: 0  # 随机种子
-loadModel: "episode_100.pt"  # 加载的模型名称
+loadModel: "lastest.pt"  # 加载的模型名称
 testEpisodes: 1  # 测试轮次
 testUavNums: 1  # 测试的无人机数量
 envLevel: 1  # 环境难度等级

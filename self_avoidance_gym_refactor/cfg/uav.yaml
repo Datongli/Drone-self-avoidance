@@ -1,5 +1,5 @@
 uav:
-  uavNums: 15  # 无人机数量
+  uavNums: 10  # 无人机数量
   radius: 0.2  # 无人机半径
   sensorType: "2d_lidar"  # 传感器类型
   power: 5000  # 无人机总电量
