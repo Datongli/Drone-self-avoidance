@@ -248,8 +248,8 @@ class Actor(nn.Module):
         # 输出动作分布参数
         mean = self.meanLayer(x)
         logStd = self.logStdLayer(x)
-        # 防止logStd数值不稳定
-        logStd = torch.clamp(logStd, -20, 2)
+        # 限制logStd的范围
+        logStd = torch.tanh(logStd) * 10.0 - 10.0 # 映射到 [-20, 0]
         return mean, logStd, gate
 
     def get_action(self, stateData: torch.Tensor, radarData: torch.Tensor, deterministic: bool=False, difficultyLevel: float=0.0) -> tuple:
@@ -266,6 +266,7 @@ class Actor(nn.Module):
         std = logStd.exp()
         """创建正态分布"""
         normal = Normal(mean, std)
+        # print(f"mean: {mean}, std: {std}")
         if deterministic:
             # 确定性策略
             z = mean
@@ -276,7 +277,7 @@ class Actor(nn.Module):
         # 计算动作
         action = torch.tanh(z) * self.actionBound
         # 计算logProb
-        logProb = normal.log_prob(z) - torch.log(1 - (action / self.actionBound).pow(2) + 1e-6)
+        logProb = normal.log_prob(z) - (2 * (np.log(2) - z - F.softplus(-2 * z))) - np.log(self.actionBound)
         logProb = logProb.sum(dim=-1, keepdim=True)
         return action, logProb, gate
     
@@ -284,10 +285,21 @@ class Actor(nn.Module):
         """
         权重初始化函数
         """
+        # 对所有线性层和归一化层进行 正交初始化 (Orthogonal Initialization)
+        # 这有助于深层网络（如Transformer）的梯度传播
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight.data)
+                if m.bias is not None:
+                    m.bias.data.fill_(0.0)
+            elif isinstance(m, (nn.LayerNorm, nn.BatchNorm1d)):
+                m.bias.data.zero_()
+                m.weight.data.fill_(1.0)
+        # 对均值层和方差层进行 均匀初始化
         self.meanLayer.weight.data.uniform_(-3e-3, 3e-3)
         self.meanLayer.bias.data.uniform_(-3e-3, 3e-3)
         self.logStdLayer.weight.data.uniform_(-3e-3, 3e-3)
-        self.logStdLayer.bias.data.uniform_(-3e-3, 3e-3)
+        self.logStdLayer.bias.data.fill_(-2.0)
     
 
 class Critic(nn.Module):
@@ -365,6 +377,16 @@ class Critic(nn.Module):
         """
         权重初始化函数
         """
+        # 隐藏层通用初始化
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight.data)
+                if m.bias is not None:
+                    m.bias.data.fill_(0.0)
+            elif isinstance(m, (nn.LayerNorm, nn.BatchNorm1d)):
+                m.bias.data.zero_()
+                m.weight.data.fill_(1.0)
+        # 输出层初始化
         self.q1Net[-1].weight.data.uniform_(-3e-3, 3e-3)
         self.q1Net[-1].bias.data.uniform_(-3e-3, 3e-3)
         self.q2Net[-1].weight.data.uniform_(-3e-3, 3e-3)
@@ -403,13 +425,17 @@ class MTransSAC(BaseNavigationAlgorithm):
             radarDim=getattr(cfg.uav.sensor, "numBeams", 512),
             actionDim=self.actionDim
         ).to(self.device)
+        # 先使用一个固定的Alpha值
+        self.fixedAlpha = 0.0001
         # 复制目标网络参数
         self.targetCritic.load_state_dict(self.critic.state_dict())
         # 自动调节温度参数
-        self.targetEntropy = -torch.prod(torch.Tensor([self.actionDim])).item()  # 目标熵
-        self.logAlpha = torch.zeros(1, requires_grad=True, device=self.device)  # 温度参数Alpha，越大越喜欢探索
+        # self.targetEntropy = -torch.prod(torch.Tensor([self.actionDim])).item()  # 目标熵
+        self.targetEntropy = -2.0
+        # self.logAlpha = torch.zeros(1, requires_grad=True, device=self.device)  # 温度参数Alpha，越大越喜欢探索
+        self.logAlpha = torch.tensor(np.log(0.01), requires_grad=True, device=self.device) 
         if getattr(cfg, "mode", "train") == "train":
-            self.alphaOptimizer = torch.optim.Adam([self.logAlpha], lr=getattr(cfg, "learningRateAlpha", 0.01))  # alpha优化器
+            self.alphaOptimizer = torch.optim.Adam([self.logAlpha], lr=getattr(cfg, "learningRateAlpha", 1e-4))  # alpha优化器
             # 优化器
             self.actorOptimizer = torch.optim.Adam(self.actor.parameters(), lr=getattr(cfg, "learningRateActor", 1e-3))  # Actor网络优化器
             self.criticOptimizer = torch.optim.Adam(self.critic.parameters(), lr=getattr(cfg, "learningRateCritic", 1e-3))  # Critic网络优化器
@@ -477,7 +503,8 @@ class MTransSAC(BaseNavigationAlgorithm):
         with torch.no_grad():
             nextActions, nextLogProb, _ = self.actor.get_action(nextUavStates, nextRadarData, normalizedDifficulty)
             nextQ1, nextQ2 = self.targetCritic(nextUavStates, nextRadarData, nextActions, normalizedDifficulty)
-            nextQ = torch.min(nextQ1, nextQ2) - torch.exp(self.logAlpha) * nextLogProb
+            # nextQ = torch.min(nextQ1, nextQ2) - torch.exp(self.logAlpha) * nextLogProb
+            nextQ = torch.min(nextQ1, nextQ2) - self.fixedAlpha * nextLogProb
             targetQ = rewards + (1 - dones) * getattr(self.cfg, "gamma", 0.99) * nextQ
         # 当前Q值
         currentQ1, currentQ2 = self.critic(uavStates, radarData, actions, normalizedDifficulty)
@@ -493,7 +520,8 @@ class MTransSAC(BaseNavigationAlgorithm):
         Q1new = self.critic.q1(uavStates, radarData, newActions, normalizedDifficulty)  # 只计算Q1，是常见的加速技巧
         # 课程学习：根据难度级别调整熵权重
         alpha = self._get_alpha()
-        actorLoss = (alpha * logProb - Q1new).mean()
+        # actorLoss = (alpha * logProb - Q1new).mean()
+        actorLoss = (self.fixedAlpha * logProb - Q1new).mean()
         # 回传损失
         self.actorOptimizer.zero_grad()
         actorLoss.backward()
@@ -516,7 +544,8 @@ class MTransSAC(BaseNavigationAlgorithm):
             'criticLoss': criticLoss.item(),
             'actorLoss': actorLoss.item(),
             'alphaLoss': alphaLoss.item(),
-            'alpha': alpha.item(),
+            # 'alpha': alpha.item(),
+            'alpha': self.fixedAlpha,
             'gateMean': gate.mean().item(),
             'q1Mean': currentQ1.mean().item(), 
             'q2Mean': currentQ2.mean().item()
