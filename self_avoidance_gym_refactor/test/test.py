@@ -3,10 +3,11 @@
 import sys
 import os
 # 关键：若不是指定的 conda 解释器，则用它重新 exec 当前脚本
-CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
-if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
-    os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
+# CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
+# if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
+#     os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../environment-gym-refactor')))
 import hydra
 import torch
 from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
@@ -97,7 +98,7 @@ def test(cfg) -> None:
                 totalOver += statusCounters[UAVInfo.STEP_OVER]
                 # 更新进度条
                 progessBar.update(1)
-                plt.pause(60)  # 暂停60秒，以便观察
+                plt.pause(120)  # 暂停60秒，以便观察
     """打印结果"""
     print("\n============================测试汇总=================================")
     print(f"成功：{totalSuccess}")
