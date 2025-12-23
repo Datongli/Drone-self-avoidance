@@ -166,6 +166,12 @@ def main(cfg) -> None:
                                     extraInfo={"wandb_run_id": wandb.run.id if wbEnabled and wandb.run else None})
                     # 上传到wandb
                     upload_wandb(wbEnabled, lastestCheckPointPath, "latest.pt")
+                # 如果升级，保存升级模型
+                if successCount / getattr(cfg.uav, "uavNums") >= getattr(cfg.env, "successRate", 0.8) and env.unwrapped.level < getattr(cfg.env, "maxLevel", 10):
+                    snapshotPath = os.path.join(checkPointDir, f"level_{env.unwrapped.level - 1}.pt")
+                    save_checkPoint(snapshotPath, episodeIndex, navigationAlgorithm)
+                    # 上传到wandb
+                    upload_wandb(wbEnabled, snapshotPath, f"level_{env.unwrapped.level - 1}.pt")
                 """输出信息并保存模型"""
                 # 输出信息
                 progressBar.set_postfix({"当前轮次": episodeIndex,
