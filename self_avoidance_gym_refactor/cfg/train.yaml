@@ -40,7 +40,7 @@ wandb:
   mode: online   # wandb模式
   id: kw9xf9k7  # wandb实验ID
   dir: wandb  # wandb保存目录
-  resumeFlag: False  # 是否恢复实验
+  resumeFlag: True  # 是否恢复实验
   checkPointDir: checkPoint  # 模型保存目录
   checkPointPath: checkPoint/kw9xf9k7.pt  # 模型保存路径
   saveEvery: 1000  # 每训练n轮保存一次模型
