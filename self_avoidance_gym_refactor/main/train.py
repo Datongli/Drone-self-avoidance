@@ -4,10 +4,11 @@
 import sys
 import os
 # 关键：若不是指定的 conda 解释器，则用它重新 exec 当前脚本
-CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
-if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
-    os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
+# CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
+# if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
+#     os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../environment-gym-refactor')))
 import hydra
 from hydra.utils import to_absolute_path
 from tqdm import tqdm
@@ -88,6 +89,7 @@ def main(cfg) -> None:
                         state = states[uav.uavID]  # 获取当前无人机的状态（是一个字典，需要再送入网络中进行处理）
                         action, _ = navigationAlgorithm.take_action(state)  # 算法选择动作
                         nextStates, reward, uavDone, _, information = env.step((action, uav.uavID))  # 与环境交互
+                        reward = reward * getattr(cfg, "rewardScale", 0.01)  # 奖励缩放，防止奖励值过大时，网络训练不收敛
                         episodeReturn += reward  # 累计奖励
                         replayBuffer.add(state, action, reward, nextStates, uavDone)  # 放入经验回放池
                         states[uav.uavID] = nextStates  # 更新状态
