@@ -108,11 +108,33 @@ class UavAvoidEnv(gym.Env):
         """计算奖励值"""
         # 1 日常奖励部分
         # 靠近目标奖励
-        targetReward = getattr(self.cfg.env.reward, "wTarget", 2.0) * (prevDistanceToTarget - currentDistanceToTarget)
+        targetReward = getattr(self.cfg.env.reward, "wTarget", 0.1) * (prevDistanceToTarget - currentDistanceToTarget)
+        # 角度引导奖励
+        vecToTarget = np.array([
+            self.targets[uavID].x - uav.position.x,
+            self.targets[uavID].y - uav.position.y,
+            self.targets[uavID].z - uav.position.z
+        ])  # 计算理想位移向量
+        vecAction = np.array(action)  # 计算实际的动作
+        normTarget = np.linalg.norm(vecToTarget) + 1e-6  # 计算向量的模
+        normAction = np.linalg.norm(vecAction) + 1e-6  # 获取动作的模
+        cosineSimilarity = np.dot(vecAction, vecToTarget) / (normTarget * normAction)  # 计算余弦相似度
+        wAngle = getattr(self.cfg.env.reward, "wAngle", 0.5)  # 角度引导权重
+        angleReward = wAngle * cosineSimilarity  # 计算角度奖励
+        # 边界逼近惩罚
+        boundaryPenalty = 0.0  # 初始化边界逼近惩罚
+        boundSafeDistance = getattr(self.cfg.env.reward, "safeDistance", 4.0)  # 边界安全距离
+        wBound = getattr(self.cfg.env.reward, "wBound", 0.1)  # 边界惩罚权重
+        minDistanceToWall = min(abs(uav.position.x), abs(uav.position.y), abs(uav.position.z), self.length - abs(uav.position.x),
+                                 self.width - abs(uav.position.y), self.height - abs(uav.position.z))  # 到边界的最小距离
+        if minDistanceToWall < boundSafeDistance:  # 如果到边界的距离小于安全距离
+            boundaryPenalty = -wBound * (boundSafeDistance - minDistanceToWall)
         # 障碍物惩罚
         obstaclePenalty = 0.0  # 初始化障碍物惩罚
         if sensorData is not None and len(sensorData) > 0:
-            safeDistance = getattr(self.cfg.env.reward, "safeDistance", 10.0)  # 安全距离
+            sensorData = (np.array(sensorData) * (getattr(self.cfg.uav.sensor, "maxRange", 100.0) - getattr(self.cfg.uav.sensor, "minRange", 0.5))
+                          + getattr(self.cfg.uav.sensor, "minRange", 0.5))  # 反归一化传感器数据
+            safeDistance = getattr(self.cfg.env.reward, "safeDistance", 5.0)  # 安全距离
             dangerThreshold = getattr(self.cfg.env.reward, "dangerThreshold", 3.0)  # 危险阈值
             wMin = getattr(self.cfg.env.reward, "wMin", 0.5)  # 最小距离项权重
             wDanger = getattr(self.cfg.env.reward, "wDanger", 0.3)  # 危险束比例项权重
@@ -122,16 +144,29 @@ class UavAvoidEnv(gym.Env):
             dangerRatio = float(np.mean(sensorData < dangerThreshold))  # 危险束比例
             fieldTerm = float(np.mean((np.maximum(0.0, safeDistance - sensorData) / safeDistance) ** alpha))  # 距离势场项
             # 归一化minDistance惩罚
-            minDistanceTerm = (safeDistance - minDistance) / safeDistance
+            minDistanceTerm = (safeDistance - min(minDistance, safeDistance)) / safeDistance
             minDistanceTerm = max(0.0, minDistanceTerm)
             # 计算障碍物惩罚
             obstaclePenalty = wMin * minDistanceTerm + wDanger * dangerRatio + wField * fieldTerm
             obstaclePenalty = -obstaclePenalty  # 转化为负数
+            # 如果最小距离小于危险阈值，则取消角度引导奖励
+            if minDistance < dangerThreshold:
+                angleReward = 0.0
         # 能量消耗惩罚
-        wEnergy = getattr(self.cfg.env.reward, "wEnergy", 0.05)
+        wEnergy = getattr(self.cfg.env.reward, "wEnergy", 0.01)
         energyPenalty = -wEnergy * uav.currentEnergyConsumption
+        # 高度保护奖励
+        z = uav.position.z
+        heightMin, heightMax = 0.0, self.height  # 高度范围
+        safeMargin = getattr(self.cfg.env.reward, "safeMargin", 3.0)  # 保护距离
+        altitudePenalty = 0.0  # 初始化高度保护奖励
+        wAltitude = getattr(self.cfg.env.reward, "wAltitude", 0.5)  # 高度保护奖励系数
+        if z < safeMargin:
+            altitudePenalty = - wAltitude * ((safeMargin - z) / safeMargin) ** 2
+        elif z > (heightMax - safeMargin):
+            altitudePenalty = - wAltitude * ((z - (heightMax - safeMargin)) / safeMargin) ** 2
         # 汇总日常奖励
-        shapingReward = targetReward + obstaclePenalty + energyPenalty
+        shapingReward = targetReward + obstaclePenalty + energyPenalty + boundaryPenalty + angleReward + altitudePenalty
         # 2 终止奖励部分
         terminalReward = 0.0  # 初始化终止奖励
         targetRadius = getattr(self.cfg.env, "targetRadius", 1.0)  # 目标点半径
@@ -143,19 +178,19 @@ class UavAvoidEnv(gym.Env):
         if collision:
             uav.done = True
             uav.information = 2
-            terminalReward = -getattr(self.cfg.env.reward, "collisionPenalty", 100.0)
+            terminalReward = -getattr(self.cfg.env.reward, "collisionPenalty", 10.0)
         elif currentDistanceToTarget <= targetRadius:
             uav.done = True
             uav.information = 1
-            terminalReward = getattr(self.cfg.env.reward, "targetReward", 200.0)
+            terminalReward = getattr(self.cfg.env.reward, "targetReward", 20.0)
         elif powerEmpty:
             uav.done = True
             uav.information = 3
-            terminalReward = -getattr(self.cfg.env.reward, "energyOutPenalty", 80.0)
+            terminalReward = -getattr(self.cfg.env.reward, "energyOutPenalty", 8.0)
         elif uav.steps >= maxSteps:
             uav.done = True
             uav.information = 5
-            terminalReward = -getattr(self.cfg.env.reward, "stepOutPenalty", 50.0)
+            terminalReward = -getattr(self.cfg.env.reward, "stepOutPenalty", 5.0)
         # 总奖励
         reward = shapingReward + terminalReward
         # 获取状态观测值
@@ -288,7 +323,7 @@ class UavAvoidEnv(gym.Env):
             # 构建无人机前期准备
             x = random.uniform(self.length * 0.2, self.length * 0.8)  # 无人机的x坐标
             y = random.uniform(self.width * 0.05, self.width * 0.1)  # 无人机的y坐标
-            z = random.uniform(self.height * 0.05, self.height * 0.2)  # 无人机的z坐标
+            z = random.uniform(self.height * 0.2, self.height * 0.25)  # 无人机的z坐标
             # 创建无人机
             generatorUav = UAV(self.cfg, len(self.uavs))
             generatorUav.position = Coordinate(x, y, z)
