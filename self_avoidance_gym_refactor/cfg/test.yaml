@@ -17,7 +17,7 @@ seed: 0  # 随机种子
 loadModel: "lastest.pt"  # 加载的模型名称
 testEpisodes: 1  # 测试轮次
 testUavNums: 1  # 测试的无人机数量
-envLevel: 1  # 环境难度等级
+envLevel: 10  # 环境难度等级
 
 # wandb配置
 wandb:

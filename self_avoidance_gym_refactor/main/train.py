@@ -15,6 +15,7 @@ from tqdm import tqdm
 import gymnasium
 import torch
 import wandb
+import numpy as np
 from tools import ReplayBuffer, draw_rewards_images, cfg_get, load_checkPoint, wandb_init
 from tools import save_checkPoint, upload_wandb
 from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
@@ -81,19 +82,34 @@ def main(cfg) -> None:
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
                 """进行每一步的动作"""
                 while doneCount < cfg.uav.uavNums:
-                    doneCount = 0  # 清空计数器
-                    # 针对于每一个无人机对象
-                    for uav in env.unwrapped.uavs:
-                        if uav.done:
-                            doneCount += 1
-                            continue
-                        state = states[uav.uavID]  # 获取当前无人机的状态（是一个字典，需要再送入网络中进行处理）
-                        action, _ = navigationAlgorithm.take_action(state)  # 算法选择动作
+                    # 筛选出还存活的无人机
+                    activeUavs = [uav for uav in env.unwrapped.uavs if not uav.done]
+                    if not activeUavs:
+                        break  # 若所有无人机都已完成，退出循环
+                    # 构造Batch数据
+                    batchUavStates = []
+                    batchSensorStates = []
+                    for uav in activeUavs:
+                        uavData = states[uav.uavID]  # 获取当前无人机的状态
+                        batchUavStates.append(uavData["uavState"])
+                        batchSensorStates.append(uavData["sensorState"])
+                    # 堆叠数据
+                    batchInput = {
+                        "uavState": np.stack(batchUavStates),
+                        "sensorState": np.stack(batchSensorStates)
+                    }
+                    # 批量计算
+                    batchActions, _ = navigationAlgorithm.take_action(batchInput)
+                    # 分发执行
+                    for i, uav in enumerate(activeUavs):
+                        action = batchActions[i]  # 获取动作
+                        state = states[uav.uavID]  # 获取当前状态
                         nextStates, reward, uavDone, _, information = env.step((action, uav.uavID))  # 与环境交互
                         reward = reward * getattr(cfg, "rewardScale", 0.01)  # 奖励缩放，防止奖励值过大时，网络训练不收敛
                         episodeReturn += reward  # 累计奖励
                         replayBuffer.add(state, action, reward, nextStates, uavDone)  # 放入经验回放池
                         states[uav.uavID] = nextStates  # 更新状态
+                    doneCount = sum([1 for uav in env.unwrapped.uavs if uav.done])
                 """统计无人机的终止状态"""
                 # 计数器
                 statusCounters = {

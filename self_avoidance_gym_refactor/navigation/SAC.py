@@ -462,23 +462,29 @@ class MTransSAC(BaseNavigationAlgorithm):
 
     def take_action(self, stateDict: dict, deterministic: bool = False) -> tuple:
         """
-        选择动作函数
+        选择动作函数(支持 Batch Inference)
         :param stateDict: 状态字典，包含状态数据和雷达数据
         :param deterministic: 是否确定性选择动作，默认为False
-        :return: 动作张量，形状为[1, actionDim]
+        :return: 动作数组 (numpy array), 门控数组 (numpy array)
         """
         # 提取无人机状态数据
-        uavState = torch.FloatTensor(stateDict["uavState"]).unsqueeze(0).to(self.device)
+        uavState = torch.FloatTensor(stateDict["uavState"]).to(self.device)
         # 提取雷达数据
-        radarData = torch.FloatTensor(stateDict["sensorState"]).unsqueeze(0).to(self.device)
+        radarData = torch.FloatTensor(stateDict["sensorState"]).to(self.device)
+        # 兼容一个无人机输入的情况
+        if uavState.dim() == 1:
+            uavState = uavState.unsqueeze(0)
+        if radarData.dim() == 1:
+            radarData = radarData.unsqueeze(0)
         # 获得归一化的难度等级
         normalizedDifficulty = self._get_normalized_difficulty()
         # 获取动作
         with torch.no_grad():
             action, _, gate = self.actor.get_action(uavState, radarData, deterministic, normalizedDifficulty)
         # 转换为numpy数组
-        action = action.cpu().numpy().flatten()
-        gate = gate.cpu().numpy().flatten()
+        # 保留 [BatchSize, ActionDim] 的形状，方便外部索引
+        action = action.cpu().numpy()
+        gate = gate.cpu().numpy()
         return action, gate
     
     def update(self, batchData: dict, envLevel: int) -> dict:
@@ -503,8 +509,8 @@ class MTransSAC(BaseNavigationAlgorithm):
         with torch.no_grad():
             nextActions, nextLogProb, _ = self.actor.get_action(nextUavStates, nextRadarData, normalizedDifficulty)
             nextQ1, nextQ2 = self.targetCritic(nextUavStates, nextRadarData, nextActions, normalizedDifficulty)
-            # nextQ = torch.min(nextQ1, nextQ2) - torch.exp(self.logAlpha) * nextLogProb
-            nextQ = torch.min(nextQ1, nextQ2) - self.fixedAlpha * nextLogProb
+            nextQ = torch.min(nextQ1, nextQ2) - torch.exp(self.logAlpha) * nextLogProb
+            # nextQ = torch.min(nextQ1, nextQ2) - self.fixedAlpha * nextLogProb
             targetQ = rewards + (1 - dones) * getattr(self.cfg, "gamma", 0.99) * nextQ
         # 当前Q值
         currentQ1, currentQ2 = self.critic(uavStates, radarData, actions, normalizedDifficulty)
@@ -518,10 +524,15 @@ class MTransSAC(BaseNavigationAlgorithm):
         """更新Actor网络"""
         newActions, logProb, gate = self.actor.get_action(uavStates, radarData, normalizedDifficulty)
         Q1new = self.critic.q1(uavStates, radarData, newActions, normalizedDifficulty)  # 只计算Q1，是常见的加速技巧
+        # 计算专家动作
+        expertActions = self._calculate_expert_action(uavStates)
         # 课程学习：根据难度级别调整熵权重
         alpha = self._get_alpha()
-        # actorLoss = (alpha * logProb - Q1new).mean()
-        actorLoss = (self.fixedAlpha * logProb - Q1new).mean()
+        sacLoss = (alpha * logProb - Q1new).mean()  # SAC损失
+        # actorLoss = (self.fixedAlpha * logProb - Q1new).mean()
+        bcLoss = F.mse_loss(newActions, expertActions)  # 行为克隆损失
+        expertWeight = max(0.1, 1.0 - (self.difficultyLevel - 1) * 0.1)  # 动态权重
+        actorLoss = expertWeight * bcLoss + (1 - expertWeight) * sacLoss  # 策略损失
         # 回传损失
         self.actorOptimizer.zero_grad()
         actorLoss.backward()
@@ -543,9 +554,11 @@ class MTransSAC(BaseNavigationAlgorithm):
         return {
             'criticLoss': criticLoss.item(),
             'actorLoss': actorLoss.item(),
+            'bcLoss': bcLoss.item(),
+            'expertWeight': expertWeight,
             'alphaLoss': alphaLoss.item(),
-            # 'alpha': alpha.item(),
-            'alpha': self.fixedAlpha,
+            'alpha': alpha.item(),
+            # 'alpha': self.fixedAlpha,
             'gateMean': gate.mean().item(),
             'q1Mean': currentQ1.mean().item(), 
             'q2Mean': currentQ2.mean().item()
@@ -589,6 +602,28 @@ class MTransSAC(BaseNavigationAlgorithm):
         """
         maxLevel = getattr(self.cfg, "maxLevel", 10)
         return min(self.difficultyLevel / maxLevel, 1.0)
+    
+    def _calculate_expert_action(self, uavStates: torch.Tensor) -> torch.Tensor:
+        """
+        专家系统：计算指向目标点的最佳动作
+        :param uavStates: 无人机状态张量 [batchSize, stateDim]
+        :return: 专家动作张量 [batchSize, actionDim]
+        """
+        # 提取归一化的相对坐标
+        normDelta = uavStates[:, :3]
+        """反归一化"""
+        length = getattr(self.cfg.env, "length", 100)
+        width = getattr(self.cfg.env, "width", 100)
+        height = getattr(self.cfg.env, "height", 25)
+        scale = torch.tensor([length, width, height], device=self.device)  # 创建缩放张量
+        realDelta = normDelta * scale  # 真实的物理位移偏移量
+        """计算专家动作"""
+        # 计算单位方向向量
+        dist = torch.norm(realDelta, p=2, dim=1, keepdim=True)
+        direction = realDelta / (dist + 1e-6)
+        # 映射到动作空间
+        expertAction = direction * getattr(self.cfg, "actionBound", 2.0)
+        return expertAction
 
     def _get_alpha(self) -> float:
         """
