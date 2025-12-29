@@ -4,16 +4,18 @@
 import sys
 import os
 # 关键：若不是指定的 conda 解释器，则用它重新 exec 当前脚本
-CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
-if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
-    os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
+# CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
+# if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
+#     os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../environment-gym-refactor')))
 import hydra
 from hydra.utils import to_absolute_path
 from tqdm import tqdm
 import gymnasium
 import torch
 import wandb
+import numpy as np
 from tools import ReplayBuffer, draw_rewards_images, cfg_get, load_checkPoint, wandb_init
 from tools import save_checkPoint, upload_wandb
 from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
@@ -65,6 +67,7 @@ def main(cfg) -> None:
                 print(f"[ERROR] 恢复检查点失败，将从头开始训练：{e}")
         else: pass
     else: episodeIndex = 0  # 若未启用恢复，重置为0
+    env.unwrapped.level = navigationAlgorithm.difficultyLevel  # 设置环境难度
     # 用于参数变化曲线的记录
     watchRegistered = False  # 是否已注册watch
     totalEpisodes = int(getattr(cfg, "numEpisodes", 5000))  # 训练总轮次
@@ -79,18 +82,34 @@ def main(cfg) -> None:
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
                 """进行每一步的动作"""
                 while doneCount < cfg.uav.uavNums:
-                    doneCount = 0  # 清空计数器
-                    # 针对于每一个无人机对象
-                    for uav in env.unwrapped.uavs:
-                        if uav.done:
-                            doneCount += 1
-                            continue
-                        state = states[uav.uavID]  # 获取当前无人机的状态（是一个字典，需要再送入网络中进行处理）
-                        action, _ = navigationAlgorithm.take_action(state)  # 算法选择动作
+                    # 筛选出还存活的无人机
+                    activeUavs = [uav for uav in env.unwrapped.uavs if not uav.done]
+                    if not activeUavs:
+                        break  # 若所有无人机都已完成，退出循环
+                    # 构造Batch数据
+                    batchUavStates = []
+                    batchSensorStates = []
+                    for uav in activeUavs:
+                        uavData = states[uav.uavID]  # 获取当前无人机的状态
+                        batchUavStates.append(uavData["uavState"])
+                        batchSensorStates.append(uavData["sensorState"])
+                    # 堆叠数据
+                    batchInput = {
+                        "uavState": np.stack(batchUavStates),
+                        "sensorState": np.stack(batchSensorStates)
+                    }
+                    # 批量计算
+                    batchActions, _ = navigationAlgorithm.take_action(batchInput)
+                    # 分发执行
+                    for i, uav in enumerate(activeUavs):
+                        action = batchActions[i]  # 获取动作
+                        state = states[uav.uavID]  # 获取当前状态
                         nextStates, reward, uavDone, _, information = env.step((action, uav.uavID))  # 与环境交互
+                        reward = reward * getattr(cfg, "rewardScale", 0.01)  # 奖励缩放，防止奖励值过大时，网络训练不收敛
                         episodeReturn += reward  # 累计奖励
                         replayBuffer.add(state, action, reward, nextStates, uavDone)  # 放入经验回放池
                         states[uav.uavID] = nextStates  # 更新状态
+                    doneCount = sum([1 for uav in env.unwrapped.uavs if uav.done])
                 """统计无人机的终止状态"""
                 # 计数器
                 statusCounters = {
@@ -163,9 +182,14 @@ def main(cfg) -> None:
                                     extraInfo={"wandb_run_id": wandb.run.id if wbEnabled and wandb.run else None})
                     # 上传到wandb
                     upload_wandb(wbEnabled, lastestCheckPointPath, "latest.pt")
+                # 如果升级，保存升级模型
+                if successCount / getattr(cfg.uav, "uavNums") >= getattr(cfg.env, "successRate", 0.8) and env.unwrapped.level < getattr(cfg.env, "maxLevel", 10):
+                    snapshotPath = os.path.join(checkPointDir, f"level_{env.unwrapped.level - 1}.pt")
+                    save_checkPoint(snapshotPath, episodeIndex, navigationAlgorithm)
+                    # 上传到wandb
+                    upload_wandb(wbEnabled, snapshotPath, f"level_{env.unwrapped.level - 1}.pt")
                 """输出信息并保存模型"""
                 # 输出信息
-                # print(f"当前轮次{episodeIndex}，环境难度{env.level}，累计奖励{episodeReturn:.2f}，成功{successCount}，碰撞{collisionCount}，耗尽能量{powerExhaustCount}，超过步长{overCount}")
                 progressBar.set_postfix({"当前轮次": episodeIndex,
                                          "环境难度": env.unwrapped.level, 
                                          "奖励": f"{episodeReturn:.2f}", 

@@ -12,23 +12,24 @@ device: "cuda:0"  # 训练设备
 # 训练参数
 modelSavePath: "./model"  # 模型保存路径
 actionBound: 2.0  # 动作限制
-bufferSize: 5000  # 经验回放池容量
-minimalSize: 64  # 经验回放池的最小启用容量
-batchSize: 64  # 批次大小
+bufferSize: 10000  # 经验回放池容量
+minimalSize: 128  # 经验回放池的最小启用容量
+batchSize: 128  # 批次大小
 navigationModel: "SAC"  # 模型种类
 # navigationModel: "DDPG"
 numEpisodes: 10000  # 训练轮次
 seed: 0  # 随机种子
-learningRateAlpha: 0.01  # alpha学习率
-learningRateActor: 1e-3  # Actor网络学习率
-learningRateCritic: 1e-3  # Critic网络学习率
+rewardScale: 0.01  # 奖励缩放因子
+learningRateAlpha: 1e-4  # alpha学习率
+learningRateActor: 1e-4  # Actor网络学习率
+learningRateCritic: 1e-4  # Critic网络学习率
 gamma: 0.99 # 折扣因子
 maxGradNorm: 1.0  # 最大梯度范数
 targetUpdateInterval: 2  # 目标网络软更新间隔
-actorLrStepSize: 500  # Actor网络学习率衰减步长
-criticLrStepSize: 500  # Critic网络学习率衰减步长
-actorLrDecay: 0.9  # Actor网络学习率衰减因子
-criticLrDecay: 0.9  # Critic网络学习率衰减因子
+actorLrStepSize: 5000  # Actor网络学习率衰减步长
+criticLrStepSize: 5000  # Critic网络学习率衰减步长
+actorLrDecay: 0.95  # Actor网络学习率衰减因子
+criticLrDecay: 0.95  # Critic网络学习率衰减因子
 
 # wandb配置
 wandb:

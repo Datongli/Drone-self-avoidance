@@ -3,16 +3,17 @@
 import sys
 import os
 # 关键：若不是指定的 conda 解释器，则用它重新 exec 当前脚本
-CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
-if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
-    os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
+# CONDA_PY = "/home/ldt/anaconda3/envs/deeplearning/bin/python"
+# if os.path.exists(CONDA_PY) and os.path.realpath(sys.executable) != os.path.realpath(CONDA_PY):
+#     os.execv(CONDA_PY, [CONDA_PY, os.path.abspath(__file__), *sys.argv[1:]])
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../environment-gym-refactor')))
 import hydra
 import torch
 from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
 import gymnasium
 import torch
-import wandb
+import numpy as np
 from navigation.SAC import MTransSAC
 from environment_gym_refactor.uav.uav import UAVInfo
 from tqdm import tqdm
@@ -63,15 +64,30 @@ def test(cfg) -> None:
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
                 """进行每一步的动作"""
                 while doneCount < int(cfg_get(cfg, "testUavNums", 1)):
-                    doneCount = 0  # 清空计数器
-                    # 针对每一个无人机对象
-                    for uav in env.unwrapped.uavs:
-                        if uav.done:
-                            doneCount += 1
-                            continue
-                        state = states[uav.uavID]  # 获取当前无人机的状态（是一个字典，需要再送入网络中进行处理）
-                        action, _ = navigationAlgorithm.take_action(state)  # 算法选择动作
+                    # 筛选出还存活的无人机
+                    activeUavs = [uav for uav in env.unwrapped.uavs if not uav.done]
+                    if not activeUavs:  
+                        break  # 如果没有还存活的无人机，则结束循环
+                    # 构造Batch数据
+                    batchUavStates = []
+                    batchSensorStates = []
+                    for uav in activeUavs:
+                        uavData = states[uav.uavID]  # 获取当前无人机的状态
+                        batchUavStates.append(uavData["uavState"])
+                        batchSensorStates.append(uavData["sensorState"])
+                    # 堆叠数据
+                    batchInput = {
+                        "uavState": np.stack(batchUavStates),
+                        "sensorState": np.stack(batchSensorStates)
+                    }
+                    # 批量计算
+                    batchActions, _ = navigationAlgorithm.take_action(batchInput, deterministic=True)
+                    # 分发执行
+                    for i, uav in enumerate(activeUavs):
+                        action = batchActions[i]  # 获取动作
+                        state = states[uav.uavID]  # 获取当前状态
                         nextStates, reward, uavDone, _, information = env.step((action, uav.uavID))  # 与环境交互
+                        reward = reward * getattr(cfg, "rewardScale", 0.01)  # 奖励缩放，防止奖励值过大时，网络训练不收敛
                         episodeReturn += reward  # 累计奖励
                         states[uav.uavID] = nextStates  # 更新状态
                         print("=" * 20)
@@ -80,6 +96,7 @@ def test(cfg) -> None:
                         print(f"ID:{uav.uavID}, uavX: {uav.position.x}, uavY: {uav.position.y}, uavZ: {uav.position.z}")
                         env.render()  # 渲染环境
                         plt.pause(0.1)  # 暂停0.1秒，以便观察
+                    doneCount = sum([1 for uav in env.unwrapped.uavs if uav.done])
                 """统计无人机的终止状态"""
                 # 计数器
                 statusCounters= {
@@ -97,7 +114,7 @@ def test(cfg) -> None:
                 totalOver += statusCounters[UAVInfo.STEP_OVER]
                 # 更新进度条
                 progessBar.update(1)
-                plt.pause(60)  # 暂停60秒，以便观察
+                plt.pause(180)  # 暂停3分钟，以便观察
     """打印结果"""
     print("\n============================测试汇总=================================")
     print(f"成功：{totalSuccess}")
