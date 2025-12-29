@@ -165,8 +165,10 @@ class UavAvoidEnv(gym.Env):
             altitudePenalty = - wAltitude * ((safeMargin - z) / safeMargin) ** 2
         elif z > (heightMax - safeMargin):
             altitudePenalty = - wAltitude * ((z - (heightMax - safeMargin)) / safeMargin) ** 2
+        # 步数惩罚
+        stepPenalty = - getattr(self.cfg.env.reward, "wStep", 0.01)
         # 汇总日常奖励
-        shapingReward = targetReward + obstaclePenalty + energyPenalty + boundaryPenalty + angleReward + altitudePenalty
+        shapingReward = targetReward + obstaclePenalty + energyPenalty + boundaryPenalty + angleReward + altitudePenalty + stepPenalty
         # 2 终止奖励部分
         terminalReward = 0.0  # 初始化终止奖励
         targetRadius = getattr(self.cfg.env, "targetRadius", 1.0)  # 目标点半径
@@ -323,7 +325,7 @@ class UavAvoidEnv(gym.Env):
         uavNums = self.uavNums
         """循环生成无人机"""
         count = 0  # 防止陷入无限循环
-        while len(self.uavs) < uavNums and count < 5000:
+        while len(self.uavs) < uavNums:
             # 构建无人机前期准备
             x = random.uniform(self.length * 0.2, self.length * 0.8)  # 无人机的x坐标
             y = random.uniform(self.width * 0.05, self.width * 0.1)  # 无人机的y坐标
@@ -331,16 +333,22 @@ class UavAvoidEnv(gym.Env):
             # 创建无人机
             generatorUav = UAV(self.cfg, len(self.uavs))
             generatorUav.position = Coordinate(x, y, z)
-            # 检查是否与障碍物距离过近
+            # 检查是否合乎要求
             if count < 50000:
-                if not self._is_uav_overlop(generatorUav):
+                # 检查是否与障碍物距离过近
+                notTooClose = self._is_uav_too_close(generatorUav)
+                # 检查是否达到难度校验
+                achieveDifficultyVerification = self._is_Obstacles_between_uav_and_target(generatorUav)
+                if notTooClose and achieveDifficultyVerification:
                     self.uavs.append(generatorUav)
+                    count = 0
             else:
-                # 紧急情况，空间太拥挤，强制生成
+                # 紧急情况，尝试生成太多次，强制生成
                 self.uavs.append(generatorUav)
+                count = 0
             count += 1
 
-    def _is_uav_overlop(self, generatorUav: UAV) -> bool:
+    def _is_uav_too_close(self, generatorUav: UAV) -> bool:
         """
         检查无人机是否与障碍物距离过近
         :param generatorUav: 无人机
@@ -350,8 +358,38 @@ class UavAvoidEnv(gym.Env):
             # 根据建筑物的中心坐标和半径判断是否重叠
             if (abs(generatorUav.position.x - building.x) < (generatorUav.radius + building.halfX) * 1.5 and
                 abs(generatorUav.position.y - building.y) < (generatorUav.radius + building.halfY) * 1.5):
+                return False
+        return True
+    
+    def _is_Obstacles_between_uav_and_target(self, generatorUav: UAV) -> bool:
+        """
+        检查无人机是否与目标点之间是否有障碍物遮挡
+        :param generatorUav: 无人机
+        :return: bool
+        """
+        # 如果难度等级大于等于3，才需要检查
+        if self.level >= 3:
+            block = False  # 遮挡标志位
+            # 采用简单的射线采样检测，检查连线上是否有障碍物
+            samplePoints = 50
+            for step in range(1, samplePoints + 1):  # 采样50个点
+                ratio = step / samplePoints
+                # 计算采样点的坐标
+                checkX = generatorUav.position.x + (self.targets[generatorUav.uavID].x - generatorUav.position.x) * ratio
+                checkY = generatorUav.position.y + (self.targets[generatorUav.uavID].y - generatorUav.position.y) * ratio
+                checkZ = generatorUav.position.z + (self.targets[generatorUav.uavID].z - generatorUav.position.z) * ratio
+                # 检查采样点是否在障碍物中
+                for obstacle in self.staticObstacles:
+                    if ((obstacle.leftDown.x < checkX < obstacle.rightUp.x) and
+                        (obstacle.leftDown.y < checkY < obstacle.rightUp.y) and
+                        (obstacle.leftDown.z < checkZ < obstacle.rightUp.z)):
+                        block = True
+                        break
+            if block:
                 return True
-        return False
+            else:
+                return False
+        return True
     
     def _state_observation(self) -> list:
         """
