@@ -2,7 +2,7 @@ uav:
   uavNums: 10  # 无人机数量
   radius: 0.2  # 无人机半径
   sensorType: "2d_lidar"  # 传感器类型
-  power: 5000  # 无人机总电量
+  power: 2000  # 无人机总电量
   powerConsumption: 5  # 无人机基础能耗，能耗/步
   powerCoefficient: 0.2  # 无人机能耗系数
   stateDim: 7  # 状态维度

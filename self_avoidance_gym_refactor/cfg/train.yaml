@@ -21,15 +21,15 @@ numEpisodes: 10000  # 训练轮次
 seed: 0  # 随机种子
 rewardScale: 0.01  # 奖励缩放因子
 learningRateAlpha: 1e-4  # alpha学习率
-learningRateActor: 1e-3  # Actor网络学习率
-learningRateCritic: 1e-3  # Critic网络学习率
+learningRateActor: 1e-4  # Actor网络学习率
+learningRateCritic: 1e-4  # Critic网络学习率
 gamma: 0.99 # 折扣因子
 maxGradNorm: 1.0  # 最大梯度范数
 targetUpdateInterval: 2  # 目标网络软更新间隔
-actorLrStepSize: 500  # Actor网络学习率衰减步长
-criticLrStepSize: 500  # Critic网络学习率衰减步长
-actorLrDecay: 0.9  # Actor网络学习率衰减因子
-criticLrDecay: 0.9  # Critic网络学习率衰减因子
+actorLrStepSize: 5000  # Actor网络学习率衰减步长
+criticLrStepSize: 5000  # Critic网络学习率衰减步长
+actorLrDecay: 0.95  # Actor网络学习率衰减因子
+criticLrDecay: 0.95  # Critic网络学习率衰减因子
 
 # wandb配置
 wandb:
