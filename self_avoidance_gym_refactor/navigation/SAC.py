@@ -66,7 +66,7 @@ class RadarTransformer(nn.Module):
         :param outputDim: 输出维度，即Transformer网络的输出维度
         """
         super().__init__()
-        # 降维层，最终把单束雷达单个距离值升维到featureDim
+        # 升维层，最终把单束雷达单个距离值升维到featureDim
         self.dimReduction = nn.Sequential(
             nn.Linear(1, 32),
             nn.ReLU(),
@@ -106,7 +106,7 @@ class RadarTransformer(nn.Module):
         """
         # 重塑为序列
         x = radarData.unsqueeze(-1)  # [batchSize, seqLength, 1]
-        # 降维
+        # 升维
         x = self.dimReduction(x)  # [batchSize, seqLength, featureDim]
         # 位置编码
         x = self.positionEncoder(x)  # [batchSize, seqLength, featureDim]
@@ -433,7 +433,7 @@ class MTransSAC(BaseNavigationAlgorithm):
         # self.targetEntropy = -torch.prod(torch.Tensor([self.actionDim])).item()  # 目标熵
         self.targetEntropy = -2.0
         # self.logAlpha = torch.zeros(1, requires_grad=True, device=self.device)  # 温度参数Alpha，越大越喜欢探索
-        self.logAlpha = torch.tensor(np.log(0.01), requires_grad=True, device=self.device) 
+        self.logAlpha = torch.tensor(np.log(0.01), requires_grad=True, device=self.device)
         if getattr(cfg, "mode", "train") == "train":
             self.alphaOptimizer = torch.optim.Adam([self.logAlpha], lr=getattr(cfg, "learningRateAlpha", 1e-4))  # alpha优化器
             # 优化器
