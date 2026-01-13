@@ -40,7 +40,7 @@ def test(cfg) -> None:
     """初始化算法与环境"""
     navigationAlgorithm: MTransSAC = MTransSAC(cfg)  # 初始化算法
     env: UavAvoidEnv = gymnasium.make('UavAvoid-v0', cfg=cfg)  # 初始化环境
-    env.unwrapped.uavNums = int(cfg_get(cfg, "testUavNums", 1))  # 先用一个UAV进行测试
+    env.unwrapped.uavNums = int(cfg_get(cfg, "testUavNums", 1))  # 环境中的UAV数量
     env.unwrapped.level = int(cfg_get(cfg, "envLevel", 1))  # 设置环境难度等级
     """加载模型"""
     checkPointDir = cfg_get(cfg, "wandb.checkPointDir", "checkPoints")  # 检查点目录
@@ -52,6 +52,9 @@ def test(cfg) -> None:
     switch_model_eval(navigationAlgorithm)
     """获取测试参数"""
     testEpisodes = int(cfg_get(cfg, "testEpisodes", 1))  # 测试轮次
+    testUavNums = int(cfg_get(cfg, "testUavNums", 1))  # 测试的UAV数量
+    seed = getattr(cfg, "seed", None) if testEpisodes == 1 and testUavNums == 1 else None  # 仅在单次测试设置随机数种子
+    renderMode = getattr(cfg, "renderMode", "human")  # 渲染模式
     # 全局统计
     totalSuccess, totalCollision, totalPowerEmpty, totalOver = 0, 0, 0, 0
     """进行测试"""
@@ -59,11 +62,11 @@ def test(cfg) -> None:
         with tqdm(total=testEpisodes, desc="Testing") as progessBar:
             for episode in range(testEpisodes):
                 """环境重置"""
-                states = env.reset()  # 获取状态
+                states, info = env.reset(seed=seed)
                 episodeReturn = 0  # 批次的累计奖励
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
                 """进行每一步的动作"""
-                while doneCount < int(cfg_get(cfg, "testUavNums", 1)):
+                while doneCount < testUavNums:
                     # 筛选出还存活的无人机
                     activeUavs = [uav for uav in env.unwrapped.uavs if not uav.done]
                     if not activeUavs:  
@@ -90,12 +93,14 @@ def test(cfg) -> None:
                         reward = reward * getattr(cfg, "rewardScale", 0.01)  # 奖励缩放，防止奖励值过大时，网络训练不收敛
                         episodeReturn += reward  # 累计奖励
                         states[uav.uavID] = nextStates  # 更新状态
-                        print("=" * 20)
-                        print(f"ID:{uav.uavID}, Action: {action}")
-                        print(f"ID:{uav.uavID}, Reward: {reward}")
-                        print(f"ID:{uav.uavID}, uavX: {uav.position.x}, uavY: {uav.position.y}, uavZ: {uav.position.z}")
-                        env.render()  # 渲染环境
-                        plt.pause(0.1)  # 暂停0.1秒，以便观察
+                        # print("=" * 20)
+                        # print(f"ID:{uav.uavID}, Action: {action}")
+                        # print(f"ID:{uav.uavID}, Reward: {reward}")
+                        # print(f"ID:{uav.uavID}, uavX: {uav.position.x}, uavY: {uav.position.y}, uavZ: {uav.position.z}")
+                        if renderMode is not None:
+                            env.render()  # 渲染环境
+                            plt.pause(0.1)  # 暂停0.1秒，以便观察
+                        else: pass
                     doneCount = sum([1 for uav in env.unwrapped.uavs if uav.done])
                 """统计无人机的终止状态"""
                 # 计数器
@@ -114,7 +119,9 @@ def test(cfg) -> None:
                 totalOver += statusCounters[UAVInfo.STEP_OVER]
                 # 更新进度条
                 progessBar.update(1)
-                plt.pause(180)  # 暂停3分钟，以便观察
+                if renderMode is not None:
+                    plt.pause(180)  # 暂停3分钟，以便观察
+                else: pass
     """打印结果"""
     print("\n============================测试汇总=================================")
     print(f"成功：{totalSuccess}")

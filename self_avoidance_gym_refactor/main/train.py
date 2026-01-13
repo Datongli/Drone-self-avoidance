@@ -77,7 +77,7 @@ def main(cfg) -> None:
             while episodeIndex < totalEpisodes:
                 episodeIndex += 1
                 """环境重置与初始化记录变量"""
-                states = env.reset()  # 获取状态
+                states, info = env.reset()  # 获取状态
                 episodeReturn = 0  # 批次的累计奖励
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
                 """进行每一步的动作"""
