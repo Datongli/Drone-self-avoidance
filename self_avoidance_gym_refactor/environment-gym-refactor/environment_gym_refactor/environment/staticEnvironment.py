@@ -59,11 +59,14 @@ class UavAvoidEnv(gym.Env):
             self.fig = plt.figure()
             self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
 
-    def reset(self) -> list:
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> list:
         """
-        重置环境
+        重置环境，支持传入随机数种子(seed)
+        :param seed: 随机数种子，默认为None，自由随机初始化
+        :param options: 其他选项
         :return: list
         """
+        super().reset(seed=seed)
         """清空目标点、静态障碍物、无人机"""
         self.targets.clear()
         self.staticObstacles.clear()
@@ -76,7 +79,8 @@ class UavAvoidEnv(gym.Env):
         if self.renderMode == "human":
             # 如果是“human”模式，渲染环境
             self.render(1)
-        return self._state_observation()
+        # gymnasium规范reset推荐返回 (obs, info)
+        return self._state_observation(), {}
         
     def step(self, u: tuple) -> tuple | None:
         """
@@ -246,16 +250,16 @@ class UavAvoidEnv(gym.Env):
         """
         """确定障碍物的数量"""
         # 按照课程学习的思路，生成与当前等级对应的静态障碍物数量
-        staticObstaclesNumber = random.randint(self.level, self.level * 2)
+        staticObstaclesNumber = int(self.np_random.integers(self.level, self.level * 2 + 1))
         """循环生成静态障碍物"""
         count = 0  # 防止陷入无限循环
         while len(self.staticObstacles) < staticObstaclesNumber and count < 5000:
             # 构建建筑物前期准备
-            x = random.uniform(self.length * 0.1, self.length * 0.9)  # 建筑物中心的x坐标
-            y = random.uniform(self.width * 0.1, self.width * 0.9)  # 建筑物中心的y坐标
-            halfX = random.uniform(self.obstacleHorizontalRange * 0.1, self.obstacleHorizontalRange)  # 建筑物x方向长度一半
-            halfY = random.uniform(self.obstacleHorizontalRange * 0.1, self.obstacleHorizontalRange)  # 建筑物y方向宽度一半
-            height = random.uniform(self.obstacleVerticalRange * 0.1, self.obstacleVerticalRange)  # 建筑物的高度
+            x = float(self.np_random.uniform(self.length * 0.1, self.length * 0.9))  # 建筑物中心的x坐标
+            y = float(self.np_random.uniform(self.width * 0.1, self.width * 0.9))   # 建筑物中心的y坐标
+            halfX = float(self.np_random.uniform(self.obstacleHorizontalRange * 0.1, self.obstacleHorizontalRange))  # 建筑物x方向长度的一半
+            halfY = float(self.np_random.uniform(self.obstacleHorizontalRange * 0.1, self.obstacleHorizontalRange))  # 建筑物y方向宽度的一半
+            height = float(self.np_random.uniform(self.obstacleVerticalRange * 0.1, self.obstacleVerticalRange))  # 建筑物高度
             leftDown = Coordinate(x - halfX, y - halfY, 0)  # 建筑物左下角的坐标
             rightUp = Coordinate(x + halfX, y + halfY, height)  # 建筑物右上角的坐标
             # 创建障碍物
@@ -289,9 +293,9 @@ class UavAvoidEnv(gym.Env):
         count = 0  # 防止陷入无限循环
         while len(self.targets) < targetsNumber:
             # 构建目标点前期准备
-            x = random.uniform(self.length * 0.2, self.length * 0.8)  # 目标点的x坐标
-            y = random.uniform(self.width * 0.5, self.width * 0.8)  # 目标点的y坐标
-            z = random.uniform(self.height * 0.4, self.height * 0.6)  # 目标点的z坐标
+            x = float(self.np_random.uniform(self.length * 0.2, self.length * 0.8))  # 目标点的x坐标
+            y = float(self.np_random.uniform(self.width * 0.7, self.width * 0.9))  # 目标点的y坐标
+            z = float(self.np_random.uniform(self.height * 0.4, self.height * 0.6))  # 目标点的z坐标
             # 创建目标点
             generatorTargent = Target(x, y, z)
             # 检查是否与障碍物距离过近
@@ -327,9 +331,9 @@ class UavAvoidEnv(gym.Env):
         count = 0  # 防止陷入无限循环
         while len(self.uavs) < uavNums:
             # 构建无人机前期准备
-            x = random.uniform(self.length * 0.2, self.length * 0.8)  # 无人机的x坐标
-            y = random.uniform(self.width * 0.05, self.width * 0.1)  # 无人机的y坐标
-            z = random.uniform(self.height * 0.2, self.height * 0.25)  # 无人机的z坐标
+            x = float(self.np_random.uniform(self.length * 0.2, self.length * 0.8))  # 无人机的x坐标
+            y = float(self.np_random.uniform(self.width * 0.05, self.width * 0.1))  # 无人机的y坐标
+            z = float(self.np_random.uniform(self.height * 0.2, self.height * 0.25))  # 无人机的z坐标
             # 创建无人机
             generatorUav = UAV(self.cfg, len(self.uavs))
             generatorUav.position = Coordinate(x, y, z)
@@ -421,6 +425,17 @@ class UavAvoidEnv(gym.Env):
                 (obstacle.leftDown.z - uav.radius < uav.position.z < obstacle.rightUp.z + uav.radius)):
                 return True
         return False
+    
+    def _draw_sphere(self, x: float, y: float, z: float, r: float = 0.2, color: str = "blue", alpha: float = 0.9, resolution: int = 12) -> None:
+        """
+        在3D坐标系中绘制球体（用于用“米”尺度表达无人机半径）
+        """
+        u = np.linspace(0, 2 * np.pi, resolution)
+        v = np.linspace(0, np.pi, resolution)
+        xs = x + r * np.outer(np.cos(u), np.sin(v))
+        ys = y + r * np.outer(np.sin(u), np.sin(v))
+        zs = z + r * np.outer(np.ones_like(u), np.cos(v))
+        self.ax.plot_surface(xs, ys, zs, color=color, linewidth=0, antialiased=True, shade=True, alpha=alpha)
 
 
 if __name__ == '__main__':
