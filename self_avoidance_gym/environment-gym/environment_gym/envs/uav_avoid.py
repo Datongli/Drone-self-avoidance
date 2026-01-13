@@ -282,19 +282,20 @@ class UavAvoidEnv(gym.Env):
         """清空无人机对象和建筑对象"""
         self.uavs = []  # 清空无人机对象
         self.bds = []  # 清空建筑对象
+        self.state = []
         """构建建筑物"""
         # 随机生成建筑物，其数量根据课程学习的难度生成，同时判断是否有重叠
-        building_num = random.randint(self.level, self.level * 2)
+        building_num = int(self.np_random.integers(self.level, self.level * 2 + 1))
         while True:
             # 判断是否达到要生成的障碍物的数量
             if len(self.bds) >= building_num:
                 break
             """构建建筑物的前期准备"""
-            x = random.uniform(20, self.action_area[1][0] - 10)  # 建筑物中心的x坐标
-            y = random.uniform(10, self.action_area[1][1] - 10)  # 建筑物中心的y坐标
-            length = random.uniform(1, 5)  # 建筑物x方向长度一半
-            width = random.uniform(1, 5)  # 建筑物y方向宽度一半
-            height = random.uniform(self.action_area[1][2] - 20, self.action_area[1][2] - 3)  # 建筑物的高度
+            x = float(self.np_random.uniform(10, self.action_area[1][0] - 10))  # 建筑物中心的x坐标
+            y = float(self.np_random.uniform(10, self.action_area[1][1] - 10))  # 建筑物中心的y坐标
+            length = float(self.np_random.uniform(1, 10))  # 建筑物x方向长度一半
+            width = float(self.np_random.uniform(1, 10))  # 建筑物y方向宽度一半
+            height = float(self.np_random.uniform(2, self.action_area[1][2] - 5))  # 建筑物的高度
             left_down = [x - length, y - width, 0]  # 建筑物左下角点的坐标
             right_up = [x + length, y + width, height]  # 建筑物右上角点的坐标
             """判断预备生成的建筑物是否和已经生成的建筑物有重叠现象"""
@@ -316,9 +317,9 @@ class UavAvoidEnv(gym.Env):
                     self.bds.append(Building(x, y, length, width, height, left_down, right_up))
         """随机生成目标点的位置"""
         while True:
-            x = random.randint(60, 90)  # 目标点的x坐标
-            y = random.randint(10, 90)  # 目标点的y坐标
-            z = random.randint(10, self.action_area[1][2] - 5)  # 目标点的z坐标
+            x = float(self.np_random.uniform(20, 80))  # 目标点的x坐标
+            y = float(self.np_random.uniform(70, 90))  # 目标点的y坐标
+            z = float(self.np_random.uniform(10, self.action_area[1][2] - 10))  # 目标点的z坐标
             in_build = False  # 目标点是否在建筑物内的标志位
             for building in self.bds:
                 if self._overlop(building, x, y, z, self.agent_r):
@@ -331,9 +332,9 @@ class UavAvoidEnv(gym.Env):
         for uav_num in range(self.uavs_num):
             too_many_num = 0  # 为了防止陷入死循环的计数器
             while True:
-                x = random.randint(10, 15)  # 无人机的x坐标
-                y = random.randint(10, 90)  # 无人机的y坐标
-                z = random.randint(6, 8)  # 无人机的z坐标
+                x = float(self.np_random.uniform(20, 80))  # 无人机的x坐标
+                y = float(self.np_random.uniform(5, 10))  # 无人机的y坐标
+                z = float(self.np_random.uniform(5, 8))  # 无人机的z坐标
                 in_build = False  # 无人机是否在建筑物内的标志位
                 # 无人机和目标点连线上是否有建筑物的标志位，在课程学习难度较高时应该启用
                 complex_flag = False
