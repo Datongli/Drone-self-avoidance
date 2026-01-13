@@ -6,6 +6,7 @@ defaults:
 
 mode: "test"  # test模式
 renderMode: "human"  # 渲染模式
+# renderMode: null  # 渲染模式
 device: "cuda:0"  # 训练设备
 
 # 测试参数
@@ -13,11 +14,11 @@ modelSavePath: "./model"  # 模型保存路径
 actionBound: 2.0  # 动作限制
 navigationModel: "SAC"  # 模型种类
 # navigationModel: "DDPG"
-seed: 0  # 随机种子
 loadModel: "lastest.pt"  # 加载的模型名称
 testEpisodes: 1  # 测试轮次
 testUavNums: 1  # 测试的无人机数量
-envLevel: 10  # 环境难度等级
+envLevel: 15  # 环境难度等级
+seed: 131  # 环境初始化的随机数种子
 
 # wandb配置
 wandb:
