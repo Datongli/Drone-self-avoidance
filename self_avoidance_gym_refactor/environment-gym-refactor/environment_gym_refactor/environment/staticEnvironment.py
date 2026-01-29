@@ -306,6 +306,12 @@ class UavAvoidEnv(gym.Env):
                 # 紧急情况，空间太拥挤，强制生成
                 self.targets.append(generatorTargent)
             count += 1
+        """如果是测试环境，目标点可以为配置的位置"""
+        if getattr(self.cfg, "mode", "train") == "test" and getattr(self.cfg, "targetPosition", None) is not None:
+            self.targets[0].x = self.cfg.targetPosition[0]
+            self.targets[0].y = self.cfg.targetPosition[1]
+            self.targets[0].z = self.cfg.targetPosition[2]
+        else: pass
 
     def _is_target_overlop(self, generatorTargent: Target) -> bool:
         """
@@ -351,6 +357,12 @@ class UavAvoidEnv(gym.Env):
                 self.uavs.append(generatorUav)
                 count = 0
             count += 1
+        """如果是测试环境，无人机位置为配置的位置"""
+        if getattr(self.cfg, "mode", "train") == "test" and getattr(self.cfg, "uavInitPosition", None) is not None:
+            self.uavs[0].position.x = self.cfg.uavInitPosition[0]
+            self.uavs[0].position.y = self.cfg.uavInitPosition[1]
+            self.uavs[0].position.z = self.cfg.uavInitPosition[2]
+        else: pass
 
     def _is_uav_too_close(self, generatorUav: UAV) -> bool:
         """
@@ -436,6 +448,45 @@ class UavAvoidEnv(gym.Env):
         ys = y + r * np.outer(np.sin(u), np.sin(v))
         zs = z + r * np.outer(np.ones_like(u), np.cos(v))
         self.ax.plot_surface(xs, ys, zs, color=color, linewidth=0, antialiased=True, shade=True, alpha=alpha)
+
+
+class UavAvoidEnvSAC(UavAvoidEnv):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+
+
+class UavAvoidEnvDDPG(UavAvoidEnv):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+
+    def _state_observation(self) -> list:
+        """
+        重写父类的状态观测函数，增加DDPG需要使用的无人机自身高度信息
+        返回状态观测值
+        :return: list
+        """
+        # 调用父类的状态观测函数，获取基础的状态观测值
+        states: list[dict] = super()._state_observation()
+        # 为每个无人机添加自身高度信息
+        for uav in self.uavs:
+            states[uav.uavID]["uavZ"] = [uav.position.z]
+        return states
+    
+    def step(self, u: tuple) -> tuple | None:
+        """
+        重写父类的step函数，增加DDPG需要使用的无人机自身高度信息
+        针对指定的无人机与动作，返回新的状态观测值、奖励、是否结束、其他信息
+        :param u: 元组，包含动作和无人机ID
+        :return: tuple | None
+        """
+        # 获取无人机ID
+        _, uavID = u
+        # 调用父类的step函数，获取基础的状态观测值、奖励、是否结束、其他信息
+        nextState, reward, uavDone, done, information = super().step(u)
+        # 添加无人机自身高度信息
+        nextState["uavZ"] = np.array([self.uavs[uavID].position.z])
+        return nextState, reward, uavDone, done, information
+
 
 
 if __name__ == '__main__':
