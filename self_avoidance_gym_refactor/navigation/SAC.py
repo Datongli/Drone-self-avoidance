@@ -470,7 +470,7 @@ class MTransSAC(BaseNavigationAlgorithm):
         # 提取无人机状态数据
         uavState = torch.FloatTensor(stateDict["uavState"]).to(self.device)
         # 提取雷达数据
-        radarData = torch.FloatTensor(stateDict["sensorState"]).to(self.device)
+        radarData = torch.FloatTensor(stateDict["sensorData"]).to(self.device)
         # 兼容一个无人机输入的情况
         if uavState.dim() == 1:
             uavState = uavState.unsqueeze(0)
