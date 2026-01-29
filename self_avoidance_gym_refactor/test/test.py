@@ -15,10 +15,12 @@ import gymnasium
 import torch
 import numpy as np
 from navigation.SAC import MTransSAC
+from navigation.DDPG import DDPG
+from navigation.baseNavigationAlgorithm import BaseNavigationAlgorithm
 from environment_gym_refactor.uav.uav import UAVInfo
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from main.tools import cfg_get, load_checkPoint, switch_model_eval
+from main.tools import cfg_get, load_checkPoint, switch_model_eval, load_ddpg_pths
 # 修改字体设置，尝试多个常见的中文字体
 from pylab import mpl
 # 优先尝试 SimHei，如果不行则尝试 WenQuanYi Micro Hei (Linux常见), Microsoft YaHei (Windows), 或 DejaVu Sans (英文保底)
@@ -35,19 +37,25 @@ def test(cfg) -> None:
     :param cfg: 配置文件
     :return: None
     """
-    # 获取当前程序运行的上一级文件夹
+    # 获取当前程序运行的上一级文件夹路径
     upDir = os.path.dirname(os.path.dirname(__file__))
     """初始化算法与环境"""
-    navigationAlgorithm: MTransSAC = MTransSAC(cfg)  # 初始化算法
-    env: UavAvoidEnv = gymnasium.make('UavAvoid-v0', cfg=cfg)  # 初始化环境
+    NAVIGATION_ALGORITHM = {"SAC": MTransSAC(cfg), "DDPG": DDPG(cfg)}  # 导航算法映射表
+    ENVIRONMENT = {"SAC": 'UavAvoid-SAC', "DDPG": 'UavAvoid-DDPG'}  # 环境映射表
+    navigationModel = cfg_get(cfg, "navigationModel", "SAC")  # 导航算法名称
+    navigationAlgorithm: BaseNavigationAlgorithm = NAVIGATION_ALGORITHM[navigationModel]  # 初始化算法
+    env: UavAvoidEnv = gymnasium.make(ENVIRONMENT[navigationModel], cfg=cfg)  # 初始化环境
     env.unwrapped.uavNums = int(cfg_get(cfg, "testUavNums", 1))  # 环境中的UAV数量
     env.unwrapped.level = int(cfg_get(cfg, "envLevel", 1))  # 设置环境难度等级
     """加载模型"""
     checkPointDir = cfg_get(cfg, "wandb.checkPointDir", "checkPoints")  # 检查点目录
     checkPointDir = os.path.join(upDir, checkPointDir)  # 检查点路径
-    loadCheckPointPath = os.path.join(checkPointDir, getattr(cfg, "loadModel", "lastest.pt"))  # 要加载的检查点路径
+    SACloadCheckPointPath = os.path.join(checkPointDir, getattr(cfg, "SACloadModel", "lastest.pt"))  # 要加载的检查点路径
     # 加载检查点
-    _ = load_checkPoint(loadCheckPointPath, navigationAlgorithm)
+    if navigationModel == "SAC":
+        _ = load_checkPoint(SACloadCheckPointPath, navigationAlgorithm)
+    elif navigationModel == "DDPG":
+        load_ddpg_pths(checkPointDir, navigationAlgorithm)
     # 将模型切换为eval模式
     switch_model_eval(navigationAlgorithm)
     """获取测试参数"""
@@ -65,6 +73,8 @@ def test(cfg) -> None:
                 states, info = env.reset(seed=seed)
                 episodeReturn = 0  # 批次的累计奖励
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
+                print(f"目标点的初始三维坐标为：[{env.unwrapped.targets[0].x}, {env.unwrapped.targets[0].y}, {env.unwrapped.targets[0].z}]")
+                print(f"无人机的初始三维坐标为：[{env.unwrapped.uavs[0].position.x}, {env.unwrapped.uavs[0].position.y}, {env.unwrapped.uavs[0].position.z}]")
                 """进行每一步的动作"""
                 while doneCount < testUavNums:
                     # 筛选出还存活的无人机
@@ -72,19 +82,20 @@ def test(cfg) -> None:
                     if not activeUavs:  
                         break  # 如果没有还存活的无人机，则结束循环
                     # 构造Batch数据
-                    batchUavStates = []
-                    batchSensorStates = []
+                    batchDict = {key: [] for key in states[0].keys()}  # 初始化批量数据字典
                     for uav in activeUavs:
                         uavData = states[uav.uavID]  # 获取当前无人机的状态
-                        batchUavStates.append(uavData["uavState"])
-                        batchSensorStates.append(uavData["sensorState"])
+                        for key in batchDict.keys():
+                            batchDict[key].append(uavData[key])
                     # 堆叠数据
                     batchInput = {
-                        "uavState": np.stack(batchUavStates),
-                        "sensorState": np.stack(batchSensorStates)
+                        key: np.stack(batchDict[key]) for key in batchDict.keys()
                     }
                     # 批量计算
-                    batchActions, _ = navigationAlgorithm.take_action(batchInput, deterministic=True)
+                    if navigationModel == "SAC":
+                        batchActions, _ = navigationAlgorithm.take_action(batchInput, deterministic=True)
+                    elif navigationModel == "DDPG":
+                        batchActions = navigationAlgorithm.take_action(batchInput)[0]
                     # 分发执行
                     for i, uav in enumerate(activeUavs):
                         action = batchActions[i]  # 获取动作
@@ -120,7 +131,7 @@ def test(cfg) -> None:
                 # 更新进度条
                 progessBar.update(1)
                 if renderMode is not None:
-                    plt.pause(180)  # 暂停3分钟，以便观察
+                    plt.pause(3600)  # 暂停60分钟，以便观察
                 else: pass
     """打印结果"""
     print("\n============================测试汇总=================================")
