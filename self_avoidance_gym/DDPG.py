@@ -246,6 +246,10 @@ class DDPG:
         :param device:设备
         """
         out_fn = (lambda x: x) if discrete else (lambda x: torch.tanh(x) * action_bound)
+        if discrete:
+            out_fn = lambda x: x
+        else:
+            out_fn = lambda x: torch.tanh(x) * action_bound
         self.actor = LayerFC_actor(num_in_actor, num_out_actor, hidden_dim, activation=nn.PReLU(), out_fn=out_fn).to(device)
         self.target_actor = LayerFC_actor(num_in_actor, num_out_actor, hidden_dim, activation=nn.PReLU(), out_fn=out_fn).to(device)
         self.critic = LayerFC_critic(num_in_critic, 1, hidden_dim, activation=nn.PReLU()).to(device)
@@ -293,7 +297,7 @@ class DDPG:
         action = self.actor(state).detach().cpu().numpy()
         # 给动作添加噪声，增加搜索
         # 正态分布产生随机数并乘以标准差
-        action = action + self.sigma * np.random.randn(self.action_dim)
+        # action = action + self.sigma * np.random.randn(self.action_dim)
         return np.array(action)
 
     def take_action(self, state):

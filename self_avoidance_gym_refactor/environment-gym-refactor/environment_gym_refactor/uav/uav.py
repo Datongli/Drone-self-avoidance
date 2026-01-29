@@ -83,10 +83,10 @@ class UAV:
         uavState.append(self.velocity[2] / getattr(self.cfg.uav, "actionBound", 2))
         uavState = np.array(uavState)
         """获取传感器的状态"""
-        sensorState = self.sensor.get_sensor_data(self, env, yaw)
+        sensorData = self.sensor.get_sensor_data(self, env, yaw)
         """组合成一个状态向量字典并返回"""
         return {"uavState": uavState, 
-                "sensorState": sensorState}
+                "sensorData": sensorData}
     
     def step(self, action: np.array) -> None:
         """

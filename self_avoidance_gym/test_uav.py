@@ -166,6 +166,6 @@ if __name__ == '__main__':
                 break
             # env.ax.scatter(env.target.x, env.target.y, env.target.z, c='red')
     if render_mode != None:
-        plt.pause(100)
+        plt.pause(600)
     print("=" * 20)
     print(f"成功的次数:{n_success}")
