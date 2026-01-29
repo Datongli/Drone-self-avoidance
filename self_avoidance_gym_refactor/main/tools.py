@@ -8,6 +8,7 @@ import wandb
 import os
 import torch
 import matplotlib.pyplot as plt
+from pathlib import Path
 # 可以显示中文
 from pylab import mpl
 mpl.rcParams["font.sans-serif"] = ["SimHei"]
@@ -212,7 +213,42 @@ def load_checkPoint(checkPointPath: str, navigationAlgorithm: any) -> int:
         return episode
     except Exception as e:
         print(f"加载episode数目时失败：{e}")
-        return 0 
+        return 0
+
+
+def load_ddpg_pths(pthDir: str |Path, ddpgAgent: any, device: torch.device | None = None) -> None:
+    """
+    加载DDPG模型的各个pth文件
+    :param pthDir: pth文件目录
+    :param ddpgAgent: DDPG智能体对象
+    :param device: 设备对象
+    :return: None
+    """ 
+    pthDir = Path(pthDir)
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    pthLoad = {
+        "actor": str(pthDir / "actor.pth"),
+        "critic": str(pthDir / "critic.pth"),
+        "targetActor": str(pthDir / "target_actor.pth"),
+        "targetCritic": str(pthDir / "target_critic.pth"),
+    }
+    # 兼容不同实现的“网络字典”命名
+    netMap = None
+    if hasattr(ddpgAgent, "netDict") and isinstance(getattr(ddpgAgent, "netDict"), dict):
+        netMap = ddpgAgent.netDict
+    elif hasattr(ddpgAgent, "net_dict") and isinstance(getattr(ddpgAgent, "net_dict"), dict):
+        netMap = ddpgAgent.net_dict
+    for name, pth in pthLoad.items():
+        if not os.path.exists(pth):
+            print(f"[WARN] DDPG权重文件不存在，跳过：{pth}")
+            continue
+        checkPoint = torch.load(pth, map_location=device, weights_only=False)
+        try:
+            netMap[name].load_state_dict(checkPoint['model'])
+        except Exception as e:
+            print(f"[WARN] 加载DDPG权重文件失败：{e}")
+            continue
     
 
 def safe_load_state(targetObject: torch.nn.Module | None, stateDict: dict | None) -> None:
@@ -301,8 +337,12 @@ def switch_model_eval(navigationAlgorithm: any) -> None:
         return
     try:
         modelsToSwitch = getattr(navigationAlgorithm, "checkPointModules", ["actor", "critic", "targetCritic"])
-        for model in modelsToSwitch:
+        for modelName in modelsToSwitch:
             # 只监控有定义且是可调用对象的模块
+            model = getattr(navigationAlgorithm, modelName, None)
+            if model is None:
+                print(f"导航算法对象中不存在属性 {modelName}，跳过切换")
+                continue  # 若属性不存在，跳过
             if hasattr(model, "eval") and callable(getattr(model, "eval")):
                 model.eval()
             else: pass
