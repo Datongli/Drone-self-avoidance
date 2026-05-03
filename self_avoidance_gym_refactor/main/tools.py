@@ -53,11 +53,11 @@ class ReplayBuffer:
         # 由于state和next_state都是字典，因此需要再经过一些特殊的处理
         batchState = {
             'uavState': np.array([s['uavState'] for s in state]),
-            'sensorState': np.array([s['sensorState'] for s in state])
+            'sensorData': np.array([s['sensorData'] for s in state])
         }
-        batchNextState = {
+        batchNextState = {      
             'uavState': np.array([s['uavState'] for s in nextState]),
-            'sensorState': np.array([s['sensorState'] for s in nextState])
+            'sensorData': np.array([s['sensorData'] for s in nextState])
         }
         return batchState, action, reward, batchNextState, done
 
