@@ -5,25 +5,26 @@ defaults:
 
 
 mode: "test"  # test模式
-# renderMode: "human"  # 渲染模式
-renderMode: null  # 渲染模式
+renderMode: "human"  # 渲染模式
+# renderMode: null  # 渲染模式
 device: "cuda:0"  # 训练设备
 
 # 测试参数
 modelSavePath: "./model"  # 模型保存路径
 actionBound: 2.0  # 动作限制
 # 模型种类
-navigationModel: "SAC"  
+# navigationModel: "SAC"  
 # navigationModel: "DDPG"
+navigationModel: "SACWithQ2"
 # SACloadModel: "SAC_only_mean_good.pt"  # 加载的模型名称
 SACloadModel: "lastest.pt"  # 加载的模型名称
 DDPGPthDir: "../checkPoint"  # DDPG模型权重目录
-testEpisodes: 100  # 测试轮次
-testUavNums: 10  # 测试的无人机数量
+testEpisodes: 1  # 测试轮次
+testUavNums: 1  # 测试的无人机数量
 envLevel: 8  # 环境难度等级
 seed: null  # 环境初始化的随机数种子
 # 可选，配置测试时目标和无人机起始位置，不配置则为随机生成
-# targetPosition: [50, 170, 5]  # 目标点位置
+# targetPosition: [45, 170, 5]  # 目标点位置
 # uavInitPosition: [74.2305, 8.2587, 7.7947]  # 无人机初始位置列表，每个元素为[X, Y, Z]
 
 # wandb配置

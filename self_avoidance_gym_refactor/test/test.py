@@ -16,6 +16,7 @@ import torch
 import numpy as np
 from navigation.SAC import MTransSAC
 from navigation.DDPG import DDPG
+from navigation.differentQ import MTransSACWithQ2
 from navigation.baseNavigationAlgorithm import BaseNavigationAlgorithm
 from environment_gym_refactor.uav.uav import UAVInfo
 from tqdm import tqdm
@@ -40,8 +41,8 @@ def test(cfg) -> None:
     # 获取当前程序运行的上一级文件夹路径
     upDir = os.path.dirname(os.path.dirname(__file__))
     """初始化算法与环境"""
-    NAVIGATION_ALGORITHM = {"SAC": MTransSAC(cfg), "DDPG": DDPG(cfg)}  # 导航算法映射表
-    ENVIRONMENT = {"SAC": 'UavAvoid-SAC', "DDPG": 'UavAvoid-DDPG'}  # 环境映射表
+    NAVIGATION_ALGORITHM = {"SAC": MTransSAC(cfg), "DDPG": DDPG(cfg), "SACWithQ2": MTransSACWithQ2(cfg)}  # 导航算法映射表  
+    ENVIRONMENT = {"SAC": 'UavAvoid-SAC', "DDPG": 'UavAvoid-DDPG', "SACWithQ2": 'UavAvoid-SAC'}  # 环境映射表
     navigationModel = cfg_get(cfg, "navigationModel", "SAC")  # 导航算法名称
     navigationAlgorithm: BaseNavigationAlgorithm = NAVIGATION_ALGORITHM[navigationModel]  # 初始化算法
     env: UavAvoidEnv = gymnasium.make(ENVIRONMENT[navigationModel], cfg=cfg)  # 初始化环境
@@ -52,7 +53,7 @@ def test(cfg) -> None:
     checkPointDir = os.path.join(upDir, checkPointDir)  # 检查点路径
     SACloadCheckPointPath = os.path.join(checkPointDir, getattr(cfg, "SACloadModel", "lastest.pt"))  # 要加载的检查点路径
     # 加载检查点
-    if navigationModel == "SAC":
+    if navigationModel == "SAC" or navigationModel == "SACWithQ2":    
         _ = load_checkPoint(SACloadCheckPointPath, navigationAlgorithm)
     elif navigationModel == "DDPG":
         load_ddpg_pths(checkPointDir, navigationAlgorithm)
@@ -92,7 +93,7 @@ def test(cfg) -> None:
                         key: np.stack(batchDict[key]) for key in batchDict.keys()
                     }
                     # 批量计算
-                    if navigationModel == "SAC":
+                    if navigationModel == "SAC" or navigationModel == "SACWithQ2":    
                         batchActions, _ = navigationAlgorithm.take_action(batchInput, deterministic=True)
                     elif navigationModel == "DDPG":
                         batchActions = navigationAlgorithm.take_action(batchInput)[0]

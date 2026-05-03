@@ -21,6 +21,8 @@ from tools import save_checkPoint, upload_wandb
 from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
 from environment_gym_refactor.uav.uav import UAVInfo
 from navigation.SAC import MTransSAC
+from navigation.differentQ import MTransSACWithQ2
+from navigation.baseNavigationAlgorithm import BaseNavigationAlgorithm
 # 可以显示中文
 from pylab import mpl
 mpl.rcParams["font.sans-serif"] = ["SimHei"]
@@ -42,8 +44,9 @@ def main(cfg) -> None:
     wandb_init(cfg, upDir)
     saveEvery = int(cfg_get(cfg, "wandb.saveEvery", 10))  # 每训练n轮保存一次模型
     """初始化算法与环境"""
-    navigationAlgorithm: MTransSAC = MTransSAC(cfg)  # 初始化算法
-    env: UavAvoidEnv = gymnasium.make('UavAvoid-v0', cfg=cfg)  # 初始化环境
+    # navigationAlgorithm: BaseNavigationAlgorithm = MTransSAC(cfg)  # 初始化算法
+    navigationAlgorithm: BaseNavigationAlgorithm = MTransSACWithQ2(cfg)  # 初始化算法
+    env: UavAvoidEnv = gymnasium.make('UavAvoid-SAC', cfg=cfg)  # 初始化环境
     replayBuffer = ReplayBuffer(getattr(cfg, "bufferSize", 10000))  # 初始化经验回放池 
     rewardList = []  # 记录的每轮次累计奖励
     """wandb与checkPoint的整合"""
@@ -92,11 +95,11 @@ def main(cfg) -> None:
                     for uav in activeUavs:
                         uavData = states[uav.uavID]  # 获取当前无人机的状态
                         batchUavStates.append(uavData["uavState"])
-                        batchSensorStates.append(uavData["sensorState"])
+                        batchSensorStates.append(uavData["sensorData"])
                     # 堆叠数据
                     batchInput = {
                         "uavState": np.stack(batchUavStates),
-                        "sensorState": np.stack(batchSensorStates)
+                        "sensorData": np.stack(batchSensorStates)
                     }
                     # 批量计算
                     batchActions, _ = navigationAlgorithm.take_action(batchInput)
