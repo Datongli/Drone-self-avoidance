@@ -6,3 +6,6 @@ outputs/
 model/
 wandb/
 checkPoint/
+localtest/
+*.xlsx
+*.png
