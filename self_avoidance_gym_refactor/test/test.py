@@ -14,10 +14,8 @@ from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
 import gymnasium
 import torch
 import numpy as np
-from navigation.SAC import MTransSAC
-from navigation.DDPG import DDPG
-from navigation.differentQ import MTransSACWithQ2
 from navigation.baseNavigationAlgorithm import BaseNavigationAlgorithm
+from common.global_mappings import build_navigation_mappings, SAC_ALGORITHM, DDPG_ALGORITHM
 from environment_gym_refactor.uav.uav import UAVInfo
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -41,22 +39,23 @@ def test(cfg) -> None:
     # 获取当前程序运行的上一级文件夹路径
     upDir = os.path.dirname(os.path.dirname(__file__))
     """初始化算法与环境"""
-    NAVIGATION_ALGORITHM = {"SAC": MTransSAC(cfg), "DDPG": DDPG(cfg), "SACWithQ2": MTransSACWithQ2(cfg)}  # 导航算法映射表  
-    ENVIRONMENT = {"SAC": 'UavAvoid-SAC', "DDPG": 'UavAvoid-DDPG', "SACWithQ2": 'UavAvoid-SAC'}  # 环境映射表
+    NAVIGATION_ALGORITHM, ENVIRONMENT = build_navigation_mappings(cfg)
     navigationModel = cfg_get(cfg, "navigationModel", "SAC")  # 导航算法名称
     navigationAlgorithm: BaseNavigationAlgorithm = NAVIGATION_ALGORITHM[navigationModel]  # 初始化算法
     env: UavAvoidEnv = gymnasium.make(ENVIRONMENT[navigationModel], cfg=cfg)  # 初始化环境
     env.unwrapped.uavNums = int(cfg_get(cfg, "testUavNums", 1))  # 环境中的UAV数量
     env.unwrapped.level = int(cfg_get(cfg, "envLevel", 1))  # 设置环境难度等级
     """加载模型"""
-    checkPointDir = cfg_get(cfg, "wandb.checkPointDir", "checkPoints")  # 检查点目录
+    checkPointDir = cfg_get(cfg, "modelSavePath", "checkPoints")  # 检查点目录
     checkPointDir = os.path.join(upDir, checkPointDir)  # 检查点路径
     SACloadCheckPointPath = os.path.join(checkPointDir, getattr(cfg, "SACloadModel", "lastest.pt"))  # 要加载的检查点路径
     # 加载检查点
-    if navigationModel == "SAC" or navigationModel == "SACWithQ2":    
+    if navigationModel in SAC_ALGORITHM:    
         _ = load_checkPoint(SACloadCheckPointPath, navigationAlgorithm)
-    elif navigationModel == "DDPG":
+    elif navigationModel in DDPG_ALGORITHM:
         load_ddpg_pths(checkPointDir, navigationAlgorithm)
+    else:
+        raise ValueError(f"导航算法{navigationModel}不在支持的系列中")
     # 将模型切换为eval模式
     switch_model_eval(navigationAlgorithm)
     """获取测试参数"""
@@ -93,10 +92,12 @@ def test(cfg) -> None:
                         key: np.stack(batchDict[key]) for key in batchDict.keys()
                     }
                     # 批量计算
-                    if navigationModel == "SAC" or navigationModel == "SACWithQ2":    
+                    if navigationModel in SAC_ALGORITHM:    
                         batchActions, _ = navigationAlgorithm.take_action(batchInput, deterministic=True)
-                    elif navigationModel == "DDPG":
+                    elif navigationModel in DDPG_ALGORITHM:
                         batchActions = navigationAlgorithm.take_action(batchInput)[0]
+                    else:
+                        raise ValueError(f"导航算法{navigationModel}不在支持的系列中")
                     # 分发执行
                     for i, uav in enumerate(activeUavs):
                         action = batchActions[i]  # 获取动作
