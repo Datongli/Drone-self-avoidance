@@ -20,8 +20,7 @@ from tools import ReplayBuffer, draw_rewards_images, cfg_get, load_checkPoint, w
 from tools import save_checkPoint, upload_wandb
 from environment_gym_refactor.environment.staticEnvironment import UavAvoidEnv
 from environment_gym_refactor.uav.uav import UAVInfo
-from navigation.SAC import MTransSAC
-from navigation.differentQ import MTransSACWithQ2
+from common.global_mappings import build_navigation_mappings
 from navigation.baseNavigationAlgorithm import BaseNavigationAlgorithm
 # 可以显示中文
 from pylab import mpl
@@ -39,14 +38,26 @@ def main(cfg) -> None:
     """
     # 获取当前程序运行的上一级文件夹
     upDir = os.path.dirname(os.path.dirname(__file__))
+    """设置随机种子以确保结果可重复"""
+    seed = cfg_get(cfg, "seed", None)
+    if seed is not None:
+        import random
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
     """wandb初始化"""
     wbEnabled = bool(cfg_get(cfg, "wandb.enabled", True))  # 是否使用wandb
     wandb_init(cfg, upDir)
     saveEvery = int(cfg_get(cfg, "wandb.saveEvery", 10))  # 每训练n轮保存一次模型
     """初始化算法与环境"""
-    # navigationAlgorithm: BaseNavigationAlgorithm = MTransSAC(cfg)  # 初始化算法
-    navigationAlgorithm: BaseNavigationAlgorithm = MTransSACWithQ2(cfg)  # 初始化算法
-    env: UavAvoidEnv = gymnasium.make('UavAvoid-SAC', cfg=cfg)  # 初始化环境
+    NAVIGATION_ALGORITHM, ENVIRONMENT = build_navigation_mappings(cfg)
+    navigationModel = cfg_get(cfg, "navigationModel", "SAC")  # 导航算法名称
+    navigationAlgorithm: BaseNavigationAlgorithm = NAVIGATION_ALGORITHM[navigationModel]  # 初始化算法
+    env: UavAvoidEnv = gymnasium.make(ENVIRONMENT[navigationModel], cfg=cfg)  # 初始化环境
     replayBuffer = ReplayBuffer(getattr(cfg, "bufferSize", 10000))  # 初始化经验回放池 
     rewardList = []  # 记录的每轮次累计奖励
     """wandb与checkPoint的整合"""
@@ -65,6 +76,7 @@ def main(cfg) -> None:
             try:
                 # 加载检查点并返回episode索引
                 episodeIndex = load_checkPoint(loadFromPath, navigationAlgorithm)
+                print(f"[INFO] 从检查点恢复训练，当前episode索引：{episodeIndex}")
             except Exception as e:
                 episodeIndex = 0  # 若加载失败，重置为0
                 print(f"[ERROR] 恢复检查点失败，将从头开始训练：{e}")
@@ -80,7 +92,7 @@ def main(cfg) -> None:
             while episodeIndex < totalEpisodes:
                 episodeIndex += 1
                 """环境重置与初始化记录变量"""
-                states, info = env.reset()  # 获取状态
+                states, info = env.reset(seed=seed) if seed is not None else env.reset()  # 获取状态
                 episodeReturn = 0  # 批次的累计奖励
                 doneCount = 0  # 完成的无人机个数（包括成功、碰撞、超过步长、耗尽能量）
                 """进行每一步的动作"""
