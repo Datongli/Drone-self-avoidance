@@ -499,11 +499,11 @@ class MTransSAC(BaseNavigationAlgorithm):
         normalizedDifficulty = self._get_normalized_difficulty()  # 获取归一化的难度等级
         """转换数据到tensor"""
         uavStates = torch.FloatTensor(np.array(batchData['states']['uavState'])).to(self.device)
-        radarData = torch.FloatTensor(np.array(batchData['states']['sensorState'])).to(self.device)
+        radarData = torch.FloatTensor(np.array(batchData['states']['sensorData'])).to(self.device)
         actions = torch.FloatTensor(np.array(batchData['actions'])).to(self.device)
         rewards = torch.FloatTensor(np.array(batchData['rewards'])).unsqueeze(1).to(self.device)
         nextUavStates = torch.FloatTensor(np.array(batchData['nextStates']['uavState'])).to(self.device)
-        nextRadarData = torch.FloatTensor(np.array(batchData['nextStates']['sensorState'])).to(self.device)
+        nextRadarData = torch.FloatTensor(np.array(batchData['nextStates']['sensorData'])).to(self.device)
         dones = torch.FloatTensor(np.array(batchData['dones'])).unsqueeze(1).to(self.device)
         """更新Critic网络"""
         with torch.no_grad():
