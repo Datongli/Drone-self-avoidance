@@ -20,7 +20,7 @@ def main():
     }
 
     # 测试的环境等级
-    levels = [5, 8, 10, 15]
+    levels = [50]
     # 在每个等级下重复测试的轮次
     rounds = 10
     
@@ -37,11 +37,13 @@ def main():
     print(f"结果将实时写入: {csv_file}")
     print("=" * 40)
 
-    # 准备 csv 写入流程（加上 encoding 避免乱码）
-    with open(csv_file, 'w', newline='', encoding='utf-8-sig') as f:
+    # 准备 csv 写入流程（加上 encoding 避免乱码），改为 'a' 追加模式
+    file_exists = os.path.isfile(csv_file)
+    with open(csv_file, 'a', newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
-        # 写入表头
-        writer.writerow(["Model", "EnvLevel", "Round", "Success", "Collision", "PowerEmpty", "StepOver"])
+        # 如果文件是新创建的，先写入表头
+        if not file_exists:
+            writer.writerow(["Model", "EnvLevel", "Round", "Success", "Collision", "PowerEmpty", "StepOver"])
 
         for model, ckpt in models_and_checkpoints.items():
             for lvl in levels:

@@ -1,1 +1,4 @@
 outputs/
+*.csv
+*.md
+auto_test.py
